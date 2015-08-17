@@ -80,6 +80,9 @@
 
 #define MMC35240_OTP_START_ADDR		0x1B
 
+#define MMC35240_CHIP_ID	0x08
+#define MMC34160_CHIP_ID	0x06
+
 enum mmc35240_resolution {
 	MMC35240_16_BITS_SLOW = 0, /* 7.92 ms */
 	MMC35240_16_BITS_FAST,     /* 4.08 ms */
@@ -93,29 +96,96 @@ enum mmc35240_axis {
 	AXIS_Z,
 };
 
-static const struct {
+struct mmc3xxxx_props_table {
 	int sens[3]; /* sensitivity per X, Y, Z axis */
 	int nfo; /* null field output */
-} mmc35240_props_table[] = {
-	/* 16 bits, 125Hz ODR */
-	{
-		{1024, 1024, 1024},
-		32768,
+};
+
+static int mmc34160_convert_to_mgauss(int raw[3], int sens[3], int nfo,
+				  int index, int *val)
+{
+	return (raw[index] - nfo) * 1000 / sens[index];
+}
+
+static int mmc35240_convert_to_mgauss(int raw[3], int sens[3], int nfo,
+				  int index, int *val)
+{
+	switch (index) {
+	case AXIS_X:
+		*val = (raw[AXIS_X] - nfo) * 1000 / sens[AXIS_X];
+		break;
+	case AXIS_Y:
+		*val = (raw[AXIS_Y] - nfo) * 1000 / sens[AXIS_Y] -
+			(raw[AXIS_Z] - nfo)  * 1000 / sens[AXIS_Z];
+		break;
+	case AXIS_Z:
+		*val = (raw[AXIS_Y] - nfo) * 1000 / sens[AXIS_Y] +
+			(raw[AXIS_Z] - nfo) * 1000 / sens[AXIS_Z];
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+struct mmc3xxxx_chip_info {
+	bool uses_compensation;
+	int (*convert_to_mgauss)(int raw[3], int sens[3], int nfo, int index, int *val);
+	const struct mmc3xxxx_props_table props_table[];
+};
+
+static const struct mmc3xxxx_chip_info mmc35240_chip_info = {
+	.uses_compensation = true,
+	.convert_to_mgauss = mmc35240_convert_to_mgauss,
+	.props_table = {
+		/* 16 bits, 125Hz ODR */
+		{
+			{1024, 1024, 1024},
+			32768,
+		},
+		/* 16 bits, 250Hz ODR */
+		{
+			{1024, 1024, 770},
+			32768,
+		},
+		/* 14 bits, 450Hz ODR */
+		{
+			{256, 256, 193},
+			8192,
+		},
+		/* 12 bits, 800Hz ODR */
+		{
+			{64, 64, 48},
+			2048,
+		},
 	},
-	/* 16 bits, 250Hz ODR */
-	{
-		{1024, 1024, 770},
-		32768,
-	},
-	/* 14 bits, 450Hz ODR */
-	{
-		{256, 256, 193},
-		8192,
-	},
-	/* 12 bits, 800Hz ODR */
-	{
-		{64, 64, 48},
-		2048,
+};
+
+static const struct mmc3xxxx_chip_info mmc34160_chip_info = {
+	.uses_compensation = false,
+	.convert_to_mgauss = mmc34160_convert_to_mgauss,
+	.props_table = {
+		/* 16 bits, 125Hz ODR */
+		{
+			{2048, 2048, 2048},
+			32768,
+		},
+		/* 16 bits, 250Hz ODR */
+		{
+			{2048, 2048, 2048},
+			32768,
+		},
+		/* 14 bits, 450Hz ODR */
+		{
+			{512, 512, 512},
+			8192,
+		},
+		/* 12 bits, 800Hz ODR */
+		{
+			{128, 128, 128},
+			2048,
+		},
 	},
 };
 
@@ -123,7 +193,9 @@ struct mmc35240_data {
 	struct i2c_client *client;
 	struct mutex mutex;
 	struct regmap *regmap;
+	struct mmc3xxxx_chip_info *chip_info;
 	enum mmc35240_resolution res;
+	bool enable_comp;
 
 	/* OTP compensation */
 	int axis_coef[3];
@@ -236,6 +308,9 @@ static int mmc35240_init(struct mmc35240_data *data)
 	if (ret < 0)
 		return ret;
 
+	if (!data->chip_info->uses_compensation)
+		return 0;
+
 	ret = regmap_bulk_read(data->regmap, MMC35240_OTP_START_ADDR,
 			       otp_data, sizeof(otp_data));
 	if (ret < 0)
@@ -311,37 +386,31 @@ static int mmc35240_read_measurement(struct mmc35240_data *data, __le16 buf[3])
 static int mmc35240_raw_to_mgauss(struct mmc35240_data *data, int index,
 				  __le16 buf[], int *val)
 {
+	const struct mmc3xxxx_chip_info *chip_info;
+	const struct mmc3xxxx_props_table *ptable;
 	int raw[3];
 	int sens[3];
 	int nfo;
+
+	chip_info = &data->chip_info;
+	ptable = &chip_info->props_table[data->res];
 
 	raw[AXIS_X] = le16_to_cpu(buf[AXIS_X]);
 	raw[AXIS_Y] = le16_to_cpu(buf[AXIS_Y]);
 	raw[AXIS_Z] = le16_to_cpu(buf[AXIS_Z]);
 
-	sens[AXIS_X] = mmc35240_props_table[data->res].sens[AXIS_X];
-	sens[AXIS_Y] = mmc35240_props_table[data->res].sens[AXIS_Y];
-	sens[AXIS_Z] = mmc35240_props_table[data->res].sens[AXIS_Z];
+	sens[AXIS_X] = ptable->sens[AXIS_X];
+	sens[AXIS_Y] = ptable->sens[AXIS_Y];
+	sens[AXIS_Z] = ptable->sens[AXIS_Z];
 
-	nfo = mmc35240_props_table[data->res].nfo;
+	nfo = ptable[data->res].nfo;
 
-	switch (index) {
-	case AXIS_X:
-		*val = (raw[AXIS_X] - nfo) * 1000 / sens[AXIS_X];
-		break;
-	case AXIS_Y:
-		*val = (raw[AXIS_Y] - nfo) * 1000 / sens[AXIS_Y] -
-			(raw[AXIS_Z] - nfo)  * 1000 / sens[AXIS_Z];
-		break;
-	case AXIS_Z:
-		*val = (raw[AXIS_Y] - nfo) * 1000 / sens[AXIS_Y] +
-			(raw[AXIS_Z] - nfo) * 1000 / sens[AXIS_Z];
-		break;
-	default:
-		return -EINVAL;
-	}
-	/* apply OTP compensation */
-	*val = (*val) * data->axis_coef[index] / data->axis_scale[index];
+	ret = chip_info->convert_to_mgauss(raw, sens, nfo, index, cal);
+	if (ret < 0)
+		return ret;
+
+	if (chip_info->uses_compensation)
+		*val = (*val) * data->axis_coef[index] / data->axis_scale[index];
 
 	return 0;
 }
@@ -362,7 +431,7 @@ static int mmc35240_read_raw(struct iio_dev *indio_dev,
 		mutex_unlock(&data->mutex);
 		if (ret < 0)
 			return ret;
-		ret = mmc35240_raw_to_mgauss(data, chan->address, buf, val);
+		ret = mmc35240_convert_to_mgauss(data, chan->address, buf, val);
 		if (ret < 0)
 			return ret;
 		return IIO_VAL_INT;
@@ -499,6 +568,7 @@ static int mmc35240_probe(struct i2c_client *client)
 	data = iio_priv(indio_dev);
 	i2c_set_clientdata(client, indio_dev);
 	data->client = client;
+	data->chip_info = i2c_get_match_data(client);
 	data->regmap = regmap;
 	data->res = MMC35240_16_BITS_SLOW;
 
@@ -549,19 +619,34 @@ static DEFINE_SIMPLE_DEV_PM_OPS(mmc35240_pm_ops, mmc35240_suspend,
 				mmc35240_resume);
 
 static const struct of_device_id mmc35240_of_match[] = {
-	{ .compatible = "memsic,mmc35240", },
+	{ .compatible = "memsic,mmc34160", .data = &mmc34160_chip_info, },
+	{ .compatible = "memsic,mmc35240", .data = &mmc35240_chip_info, },
 	{ }
 };
 MODULE_DEVICE_TABLE(of, mmc35240_of_match);
 
 static const struct acpi_device_id mmc35240_acpi_match[] = {
-	{"MMC35240", 0},
+	{
+		.id = "MMC34160",
+		.driver_data = (kernel_ulong_t)&mmc34160_chip_info,
+	},
+	{
+		.id = "MMC35240",
+		.driver_data = (kernel_ulong_t)&mmc35240_chip_info,
+	},
 	{ }
 };
 MODULE_DEVICE_TABLE(acpi, mmc35240_acpi_match);
 
 static const struct i2c_device_id mmc35240_id[] = {
-	{ "mmc35240" },
+	{
+		.name = "mmc34160",
+		.driver_data = (kernel_ulong_t)&mmc34160_chip_info,
+	},
+	{
+		.name = "mmc35240",
+		.driver_data = (kernel_ulong_t)&mmc35240_chip_info,
+	},
 	{ }
 };
 MODULE_DEVICE_TABLE(i2c, mmc35240_id);
