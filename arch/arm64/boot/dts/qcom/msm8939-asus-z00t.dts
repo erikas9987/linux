@@ -88,6 +88,18 @@
 	extcon = <&usb_id>;
 };
 
+&wcnss {
+	status = "okay";
+};
+
+&wcnss_iris {
+	compatible = "qcom,wcn3660b";
+};
+
+&wcnss_mem {
+	status = "okay";
+};
+
 &tlmm {
 	gpio_keys_default: gpio-keys-default-state {
 		pins = "gpio107", "gpio117";
