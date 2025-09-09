@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-only
+
 /dts-v1/;
 
 #include "msm8939-pm8916.dtsi"
