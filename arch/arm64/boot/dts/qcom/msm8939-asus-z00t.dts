@@ -56,6 +56,15 @@
 	cd-gpios = <&tlmm 38 GPIO_ACTIVE_LOW>;
 };
 
+&usb {
+	extcon = <&usb_id>, <&usb_id>;
+	status = "okay";
+};
+
+&usb_hs_phy {
+	extcon = <&usb_id>;
+};
+
 &tlmm {
 	sd_vmmc_en_default: sd-vmmc-en-default-state {
 		pins = "gpio87";
