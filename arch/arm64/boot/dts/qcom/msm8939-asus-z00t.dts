@@ -10,6 +10,7 @@
 	chassis-type = "handset";
 
 	aliases {
+        mmc0 = &sdhc_1;
 		serial0 = &blsp_uart2;
 	};
 
@@ -33,4 +34,8 @@
 		drive-strength = <8>;
 		bias-pull-up;
 	};
+};
+
+&sdhc_1 {
+	status = "okay";
 };
