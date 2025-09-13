@@ -84,7 +84,7 @@
 	status = "okay";
 
 	panel@0 {
-		compatible = "asus,z00l-panel";
+		compatible = "asus,z00t-panel";
 		reg = <0>;
 
 		reset-gpios = <&tlmm 25 GPIO_ACTIVE_LOW>;
