@@ -107,6 +107,10 @@
 	remote-endpoint = <&panel_in>;
 };
 
+&mdss_dsi0_phy {
+	status = "okay";
+};
+
 &sdhc_1 {
 	status = "okay";
 };
