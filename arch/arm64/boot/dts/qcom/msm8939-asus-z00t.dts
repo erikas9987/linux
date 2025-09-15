@@ -70,6 +70,19 @@
 &blsp_i2c2 {
 	status = "okay";
 
+	magnetometer@c {
+		compatible = "asahi-kasei,ak09911";
+		reg = <0x0c>;
+
+		vdd-supply = <&pm8916_l8>;
+		vid-supply = <&pm8916_l6>;
+
+		reset-gpios = <&tlmm 112 GPIO_ACTIVE_LOW>;
+
+		pinctrl-names = "default";
+		pinctrl-0 = <&mag_reset_default>;
+	};
+
 	imu@68 {
 		compatible = "invensense,mpu6515";
 		reg = <0x68>;
@@ -215,6 +228,14 @@
 
 	lcd_bl_en_default: lcd-bl-en-default-state {
 		pins = "gpio21";
+		function = "gpio";
+
+		drive-strength = <2>;
+		bias-disable;
+	};
+
+	mag_reset_default: mag-reset-default-state {
+		pins = "gpio112";
 		function = "gpio";
 
 		drive-strength = <2>;
