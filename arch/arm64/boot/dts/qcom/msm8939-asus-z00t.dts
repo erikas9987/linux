@@ -175,6 +175,10 @@
 	status = "okay";
 };
 
+&pm8916_vib {
+	status = "okay";
+};
+
 &sdhc_1 {
 	status = "okay";
 };
