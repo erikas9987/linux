@@ -65,6 +65,29 @@
 	};
 };
 
+&blsp_i2c5 {
+	status = "okay";
+
+	touchscreen@38 {
+		compatible = "edt,edt-ft5306";
+		reg = <0x38>;
+
+		interrupt-parent = <&tlmm>;
+		interrupts = <13 IRQ_TYPE_EDGE_FALLING>;
+
+		reset-gpios = <&tlmm 12 GPIO_ACTIVE_LOW>;
+
+		vcc-supply = <&pm8916_l8>;
+		iovcc-supply = <&pm8916_l6>;
+
+		touchscreen-size-x = <1080>;
+		touchscreen-size-y = <1920>;
+
+		pinctrl-names = "default";
+		pinctrl-0 = <&touchscreen_default>;
+	};
+};
+
 &blsp_uart2 {
 	status = "okay";
 };
@@ -191,6 +214,24 @@
 		function = "gpio";
 		drive-strength = <2>;
 		bias-disable;
+	};
+
+	touchscreen_default: touchscreen-default-state {
+		touch-pins {
+			pins = "gpio13";
+			function = "gpio";
+
+			drive-strength = <2>;
+			bias-pull-up;
+		};
+
+		reset-pins {
+			pins = "gpio12";
+			function = "gpio";
+
+			drive-strength = <2>;
+			bias-disable;
+		};
 	};
 
 	usb_id_default: usb-id-default-state {
