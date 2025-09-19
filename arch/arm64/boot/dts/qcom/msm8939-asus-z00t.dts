@@ -47,6 +47,15 @@
 		};
 	};
 
+	battery: battery {
+		compatible = "simple-battery";
+		device-chemistry = "lithium-ion-polymer";
+		voltage-min-design-microvolt = <3400000>;
+		voltage-max-design-microvolt = <4400000>;
+		energy-full-design-microwatt-hours = <11500000>;
+		charge-full-design-microamp-hours = <2900000>;
+	};
+
 	reg_sd_vmmc: regulator-sdcard-vmmc {
 		compatible = "regulator-fixed";
 		regulator-name = "sdcard-vmmc";
@@ -180,6 +189,11 @@
 
 &mpss_mem {
 	reg = <0x0 0x86800000 0x0 0x5500000>;
+};
+
+&pm8916_bms {
+	status = "okay";
+	monitored-battery = <&battery>;
 };
 
 &pm8916_codec {
