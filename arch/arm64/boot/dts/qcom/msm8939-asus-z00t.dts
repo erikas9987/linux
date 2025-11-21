@@ -110,6 +110,22 @@
 		pinctrl-0 = <&mag_reset_default>;
 		pinctrl-names = "default";
 	};
+	
+	light-sensor@60 {
+		compatible = "capella,cm36686";
+		reg = <0x60>;
+
+		vdd-supply = <&pm8916_l8>;
+		vio-supply = <&pm8916_l6>;
+
+		interrupts-extended = <&tlmm 113 IRQ_TYPE_LEVEL_LOW>;
+
+		capella,proximity-close-threshold = <30>;
+		capella,proximity-away-threshold = <16>;
+
+		pinctrl-0  = <&light_int_default>;
+		pinctrl-names = "default";
+	};
 
 	imu@68 {
 		compatible = "invensense,mpu6515";
@@ -352,5 +368,12 @@
 		function = "gpio";
 		drive-strength = <2>;
 		bias-disable;
+	};
+
+	light_int_default: light-int-default-state {
+		pins = "gpio113";
+		function = "gpio";
+		drive-strength = <16>;
+		bias-pull-up;
 	};
 };

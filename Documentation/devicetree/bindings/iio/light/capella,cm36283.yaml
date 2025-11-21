@@ -1,0 +1,77 @@
+# SPDX-License-Identifier: (GPL-2.0 OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/iio/light/capella,cm36283.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: Capella CM36283 I2C Proximity and Ambient Light sensor
+
+maintainers:
+  - Erikas Bitovtas <xerikasxx@gmail.com>
+
+properties:
+  compatible:
+    enum:
+      - capella,cm36283
+      - capella,cm36686
+
+  reg:
+    maxItems: 1
+
+  interrupts:
+    maxItems: 1
+
+  vdd-supply:
+    description: |
+        Regulator that provides power to the sensor.
+
+  vio-supply:
+    description: |
+        Regulator used to power IO and I2C bus.
+
+  capella,proximity-close-threshold:
+    description: |
+        Proximity hysteresis setting for detecting that the object is put
+        close to the sensor. Once this threshold is hit, the proximity
+        interrupt is triggered and the PS_CLOSE flag is raised.
+    type: integer
+
+  capella,proximity-away-threshold:
+    description: |
+        Proximity hysteresis setting for detecting that the object is put
+        away from the sensor. Once this threshold is hit, the proximity
+        interrupt is triggered and the PS_AWAY flag is raised.
+    type: integer
+
+additionalProperties: false
+
+required:
+  - compatible
+  - reg
+  - interrupts
+  - vdd-supply
+  - vio-supply
+  - capella,proximity-close-threshold
+  - capella,proximity-away-threshold
+
+examples:
+  - |
+    #include <dt-bindings/interrupt-controller/irq.h>
+
+    i2c {
+      #address-cells = <1>;
+      #size-cells = <0>;
+
+      light-sensor@60 {
+        compatible = "capella,cm36686";
+        reg = <0x60>;
+
+        vdd-supply = <&pm8916_l8>;
+        vio-supply = <&pm8916_l6>;
+
+        interrupts-extended = <&tlmm 113 IRQ_TYPE_LEVEL_LOW>;
+
+        capella,proximity-close-threshold = <30>;
+        capella,proximity-away-threshold = <16>;
+      };
+    };
