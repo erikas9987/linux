@@ -127,7 +127,7 @@
 	usb_id: usb-id {
 		compatible = "linux,extcon-usb-gpio";
 		id-gpios = <&tlmm 110 GPIO_ACTIVE_HIGH>;
-		pinctrl-0 = <&usb_id_default>;
+		pinctrl-0 = <&usb_id_default>, <&usb_id_switch_default>;
 		pinctrl-names = "default";
 	};
 };
@@ -395,5 +395,12 @@
 		function = "gpio";
 		drive-strength = <2>;
 		bias-disable;
+	};
+
+	usb_id_switch_default: usb-id-switch-default-state {
+		pins = "gpio121";
+		function = "gpio";
+		drive-strength = <2>;
+		output-high;
 	};
 };
