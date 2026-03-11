@@ -8,6 +8,7 @@
 #include <dt-bindings/gpio/gpio.h>
 #include <dt-bindings/input/input.h>
 #include <dt-bindings/interrupt-controller/irq.h>
+#include <dt-bindings/media/video-interfaces.h>
 
 / {
 	model = "Asus ZenFone 2 Laser/Selfie (1080p)";
@@ -73,6 +74,30 @@
 			<3672000 11>, <3669000 10>, <3667000 9>, <3666000 8>,
 			<3662000 7>, <3652000 6>, <3622000 5>, <3577000 4>,
 			<3518000 3>, <3440000 2>, <3321000 1>, <3000000 0>;
+	};
+
+	cam_vana_rear_vreg: cam-vana-rear-regulator {
+		compatible = "regulator-fixed";
+		regulator-name = "cam_vana_rear_vreg";
+		startup-delay-us = <0>;
+		enable-active-high;
+		gpio = <&tlmm 34 GPIO_ACTIVE_HIGH>;
+		regulator-min-microvolt = <2850000>;
+		regulator-max-microvolt = <2850000>;
+		pinctrl-0 = <&cam_vana_default>;
+		pinctrl-names = "default";
+	};
+	
+	cam_vdig_rear_vreg: cam-vana-rear-regulator {
+		compatible = "regulator-fixed";
+		regulator-name = "cam_vdig_rear_vreg";
+		startup-delay-us = <0>;
+		enable-active-high;
+		gpio = <&tlmm 116 GPIO_ACTIVE_HIGH>;
+		regulator-min-microvolt = <1200000>;
+		regulator-max-microvolt = <1200000>;
+		pinctrl-0 = <&cam_vdig_default>;
+		pinctrl-names = "default";
 	};
 
 	chosen {
@@ -209,6 +234,57 @@
 	status = "okay";
 };
 
+&camss {
+	status = "okay";
+
+	ports {
+		port@0 {
+			reg = <0>;
+
+			csiphy0_ep: endpoint {
+				clock-lanes = <0>;
+				data-lanes = <1 2 3 4>;
+				bus-type = <MEDIA_BUS_TYPE_CSI2_DPHY>;
+				remote-endpoint = <&t4k37_ep>;
+			};
+		};
+	};
+};
+
+&cci {
+	status = "okay";
+};
+
+&cci_i2c0 {
+	camera-rear@36 {
+		comaptible = "toshiba,t4k37";
+		reg = <0x36>;
+
+		clocks = <&gcc GCC_CAMSS_MCLK0_CLK>;
+		assigned-clocks = <&gcc GCC_CAMSS_MCLK0_CLK>;
+		assigned-clock-rates = <19200000>;
+
+		reset-gpios = <&tlmm 35 GPIO_ACTIVE_HIGH>;
+
+		avdd-supply = <&cam_vana_rear_vreg>;
+		dvdd-supply = <&cam_vdig_rear_vreg>;
+		vio-supply = <&pm8916_l16>;
+		
+		orientation = <1>;
+		rotation = <90>;
+
+		pinctrl-0 = <&cam_reset_default>;
+		pinctrl-names = "default";
+
+		port {
+			t4k37_ep: endpoint {
+				data-lanes = <1 2 3 4>;
+				remote-endpoint = <&csiphy0_ep>;
+			};
+		};
+	};
+};
+
 &gpu {
 	status = "okay";
 };
@@ -272,6 +348,13 @@
 	qcom,hphl-jack-type-normally-open;
 
 	status = "okay";
+};
+
+&pm8916_rpm_regulators {
+	pm8916_l16: l16 {
+		regulator-min-microvolt = <1800000>;
+		regulator-max-microvolt = <3300000>;
+	};
 };
 
 &pm8916_vib {
@@ -362,6 +445,20 @@
 		bias-pull-down;
 	};
 
+	cam_vana_default: cam-vana-default-state {
+		pins = "gpio34";
+		function = "gpio";
+		drive-strength = <2>;
+		bias-disable;
+	};
+
+	cam_reset_default: cam-reset-default-state {
+		pins = "gpio35";
+		function = "gpio";
+		drive-strength = <2>;
+		bias-disable;
+	};
+
 	imu_default: imu-default-state {
 		pins = "gpio36";
 		function = "gpio";
@@ -416,5 +513,12 @@
 		function = "gpio";
 		drive-strength = <16>;
 		bias-pull-up;
+	};
+
+	cam_vdig_default: cam-vdig-default-state {
+		pins = "gpio116";
+		function = "gpio";
+		drive-strength = <2>;
+		bias-disable;
 	};
 };
