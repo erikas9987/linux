@@ -273,7 +273,7 @@
 		orientation = <1>;
 		rotation = <90>;
 
-		pinctrl-0 = <&cam_reset_default>;
+		pinctrl-0 = <&camera_rear_default>;
 		pinctrl-names = "default";
 
 		port {
@@ -452,13 +452,6 @@
 		bias-disable;
 	};
 
-	cam_reset_default: cam-reset-default-state {
-		pins = "gpio35";
-		function = "gpio";
-		drive-strength = <2>;
-		bias-disable;
-	};
-
 	imu_default: imu-default-state {
 		pins = "gpio36";
 		function = "gpio";
@@ -521,4 +514,8 @@
 		drive-strength = <2>;
 		bias-disable;
 	};
+};
+
+&camera_rear_default {
+	/delete-node/ pwdn-pins;
 };
