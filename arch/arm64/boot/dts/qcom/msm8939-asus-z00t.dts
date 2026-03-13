@@ -257,14 +257,14 @@
 
 &cci_i2c0 {
 	camera-rear@36 {
-		comaptible = "toshiba,t4k37";
+		compatible = "toshiba,t4k37";
 		reg = <0x36>;
 
 		clocks = <&gcc GCC_CAMSS_MCLK0_CLK>;
 		assigned-clocks = <&gcc GCC_CAMSS_MCLK0_CLK>;
 		assigned-clock-rates = <19200000>;
 
-		reset-gpios = <&tlmm 35 GPIO_ACTIVE_HIGH>;
+		reset-gpios = <&tlmm 35 GPIO_ACTIVE_LOW>;
 
 		avdd-supply = <&cam_vana_rear_vreg>;
 		dvdd-supply = <&cam_vdig_rear_vreg>;
