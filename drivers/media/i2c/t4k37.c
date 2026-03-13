@@ -46,12 +46,12 @@ struct t4k37 {
 	struct device *dev;
 	struct v4l2_subdev sd;
 	struct gpio_desc *reset_gpio;
-	struct regulator_bulk_data *supplies;
+	struct regulator_bulk_data supplies[T4K37_NUM_SUPPLIES];
 	struct clk *extclk;
 	struct regmap *regmap;
 
 	const struct t4k37_mode *current_mode;
-	struct v4l2_ctrl_handler *ctrl_handler;
+	struct v4l2_ctrl_handler ctrl_handler;
 	struct v4l2_ctrl *pixel_rate;
 	struct v4l2_fract frame_interval;
 
@@ -839,7 +839,7 @@ static int t4k37_power_on(struct device *dev)
 	struct t4k37 *t4k37 = to_t4k37(sd);
 	int ret;
 
-	gpiod_set_value_cansleep(t4k37->reset_gpio, 0);
+	gpiod_set_value_cansleep(t4k37->reset_gpio, 1);
 
 	ret = regulator_bulk_enable(T4K37_NUM_SUPPLIES, t4k37->supplies);
 	if (ret)
@@ -849,7 +849,7 @@ static int t4k37_power_on(struct device *dev)
 	if (ret)
 		goto reg_disable;
 
-	gpiod_set_value_cansleep(t4k37->reset_gpio, 1);
+	gpiod_set_value_cansleep(t4k37->reset_gpio, 0);
 
 	/* Waiting for device to power up */
 	usleep_range(2000, 2100);
@@ -869,7 +869,7 @@ static int t4k37_power_off(struct device *dev)
 	struct t4k37 *t4k37 = to_t4k37(sd);
 	int ret;
 
-	gpiod_set_value_cansleep(t4k37->reset_gpio, 0);
+	gpiod_set_value_cansleep(t4k37->reset_gpio, 1);
 
 	ret = regulator_bulk_disable(T4K37_NUM_SUPPLIES, t4k37->supplies);
 	if (ret)
@@ -892,13 +892,6 @@ static int t4k37_parse_fwnode(struct t4k37 *t4k37)
 		.bus_type = V4L2_MBUS_CSI2_DPHY,
 	};
 	int ret;
-
-	ret = fwnode_property_read_u32(fwnode, "clock-frequencies",
-				       &t4k37->extclk_rate);
-	if (ret) {
-		dev_err(t4k37->dev, "Failed to read clock frequency property: %pe", ERR_PTR(ret));
-		return ret;
-	}
 
 	endpoint = fwnode_graph_get_next_endpoint(fwnode, NULL);
 	if (!endpoint) {
@@ -945,10 +938,6 @@ static int t4k37_probe(struct i2c_client *client)
 	if (IS_ERR(t4k37->extclk))
 		return dev_err_probe(t4k37->dev, PTR_ERR(t4k37->extclk), "Failed to retrieve clk");
 
-	ret = clk_set_rate(t4k37->extclk, t4k37->extclk_rate);
-	if (ret)
-		return dev_err_probe(t4k37->dev, ret, "Failed to set extclk rate");
-
 	t4k37->extclk_rate = clk_get_rate(t4k37->extclk);
 	if (t4k37->extclk_rate != T4K37_EXTCLK_RATE)
 		dev_warn(t4k37->dev, "Mismatched extclk: %d provided while %d expected, continuing anyway", t4k37->extclk_rate, T4K37_EXTCLK_RATE);
@@ -960,7 +949,7 @@ static int t4k37_probe(struct i2c_client *client)
 	if (ret)
 		return dev_err_probe(t4k37->dev, ret, "Failed to get regulators");
 
-	t4k37->reset_gpio = devm_gpiod_get(t4k37->dev, "reset", GPIOD_OUT_HIGH);
+	t4k37->reset_gpio = devm_gpiod_get(t4k37->dev, "reset", GPIOD_OUT_LOW);
 	if (IS_ERR(t4k37->reset_gpio))
 		return dev_err_probe(t4k37->dev, PTR_ERR(t4k37->reset_gpio), "Failed to get the reset gpio");
 
@@ -979,9 +968,9 @@ static int t4k37_probe(struct i2c_client *client)
 	if (ret)
 		return dev_err_probe(t4k37->dev, ret, "Failed to power on sensor");
 	
-	v4l2_ctrl_handler_init(t4k37->ctrl_handler, 1);
-	t4k37->pixel_rate = v4l2_ctrl_new_std(t4k37->ctrl_handler, NULL, V4L2_CID_PIXEL_RATE, 0, INT_MAX, 1, t4k37_calc_pixel_rate(t4k37));
-	ret = t4k37->ctrl_handler->error;
+	v4l2_ctrl_handler_init(&t4k37->ctrl_handler, 1);
+	t4k37->pixel_rate = v4l2_ctrl_new_std(&t4k37->ctrl_handler, NULL, V4L2_CID_PIXEL_RATE, 0, INT_MAX, 1, t4k37_calc_pixel_rate(t4k37));
+	ret = t4k37->ctrl_handler.error;
 	if (ret) {
 		err = "create a v4l2 ctrl handler";
 		goto free_ctrl;
@@ -989,13 +978,13 @@ static int t4k37_probe(struct i2c_client *client)
 
 	t4k37->pixel_rate->flags |= V4L2_CTRL_FLAG_READ_ONLY;
 
-	t4k37->sd.ctrl_handler = t4k37->ctrl_handler;
+	t4k37->sd.ctrl_handler = &t4k37->ctrl_handler;
 	ret = devm_mutex_init(t4k37->dev, &t4k37->lock);
 	if (ret) {
 		err = "initialize mutex";
 		goto free_ctrl;
 	}
-	t4k37->ctrl_handler->lock = &t4k37->lock;
+	t4k37->ctrl_handler.lock = &t4k37->lock;
 
 	ret = media_entity_pads_init(&t4k37->sd.entity, 1, t4k37->pad);
 	if (ret) {
@@ -1018,7 +1007,7 @@ static int t4k37_probe(struct i2c_client *client)
 free_entity:
 	media_entity_cleanup(&t4k37->sd.entity);
 free_ctrl:
-	v4l2_ctrl_handler_free(t4k37->ctrl_handler);
+	v4l2_ctrl_handler_free(&t4k37->ctrl_handler);
 	t4k37_power_off(t4k37->dev);
 	return dev_err_probe(t4k37->dev, ret, "Failed to %s", err);
 }
@@ -1030,7 +1019,7 @@ static void t4k37_remove(struct i2c_client *client)
 
 	v4l2_async_unregister_subdev(&t4k37->sd);
 	media_entity_cleanup(&t4k37->sd.entity);
-	v4l2_ctrl_handler_free(t4k37->ctrl_handler);
+	v4l2_ctrl_handler_free(&t4k37->ctrl_handler);
 
 	pm_runtime_disable(&client->dev);
 	if (!pm_runtime_status_suspended(t4k37->dev))
