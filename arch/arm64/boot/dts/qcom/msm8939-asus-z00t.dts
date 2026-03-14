@@ -82,8 +82,7 @@
 		startup-delay-us = <0>;
 		enable-active-high;
 		gpio = <&tlmm 34 GPIO_ACTIVE_HIGH>;
-		regulator-min-microvolt = <2850000>;
-		regulator-max-microvolt = <2850000>;
+		vin-supply = <&pm8916_l17>;
 		pinctrl-0 = <&cam_vana_default>;
 		pinctrl-names = "default";
 	};
@@ -93,9 +92,8 @@
 		regulator-name = "cam_vdig_rear_vreg";
 		startup-delay-us = <0>;
 		enable-active-high;
+		vin-supply = <&pm8916_s4>;
 		gpio = <&tlmm 116 GPIO_ACTIVE_HIGH>;
-		regulator-min-microvolt = <1200000>;
-		regulator-max-microvolt = <1200000>;
 		pinctrl-0 = <&cam_vdig_default>;
 		pinctrl-names = "default";
 	};
@@ -256,6 +254,16 @@
 };
 
 &cci_i2c0 {
+	dw9714: actuator@c {
+		compatible = "dongwoon,dw9714";
+		reg = <0x0c>;
+		powerdown-gpios = <&tlmm 49 GPIO_ACTIVE_HIGH>;
+		vcc-supply = <&pm8916_l10>;
+
+		pinctrl-0 = <&cam_af_pwdn_default>;
+		pinctrl-names = "default";
+	};
+
 	camera-rear@36 {
 		compatible = "toshiba,t4k37";
 		reg = <0x36>;
@@ -264,7 +272,7 @@
 		assigned-clocks = <&gcc GCC_CAMSS_MCLK0_CLK>;
 		assigned-clock-rates = <19200000>;
 
-		reset-gpios = <&tlmm 35 GPIO_ACTIVE_LOW>;
+		reset-gpios = <&tlmm 35 GPIO_ACTIVE_HIGH>;
 
 		avdd-supply = <&cam_vana_rear_vreg>;
 		dvdd-supply = <&cam_vdig_rear_vreg>;
@@ -275,6 +283,8 @@
 
 		pinctrl-0 = <&camera_rear_default>;
 		pinctrl-names = "default";
+
+		lens-focus = <&dw9714>;
 
 		port {
 			t4k37_ep: endpoint {
@@ -351,9 +361,19 @@
 };
 
 &pm8916_rpm_regulators {
+	pm8916_l10: l10 {
+		regulator-min-microvolt = <2700000>;
+		regulator-max-microvolt = <2800000>;
+	};
+
 	pm8916_l16: l16 {
 		regulator-min-microvolt = <1800000>;
 		regulator-max-microvolt = <3300000>;
+	};
+
+	pm8916_l17: l17 {
+		regulator-min-microvolt = <2850000>;
+		regulator-max-microvolt = <2850000>;
 	};
 };
 
@@ -461,6 +481,13 @@
 
 	sdc2_cd_default: sdc2-cd-default-state {
 		pins = "gpio38";
+		function = "gpio";
+		drive-strength = <2>;
+		bias-disable;
+	};
+
+	cam_af_pwdn_default: cam-af-pwdn-default-state {
+		pins = "gpio49";
 		function = "gpio";
 		drive-strength = <2>;
 		bias-disable;
