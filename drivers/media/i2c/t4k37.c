@@ -835,7 +835,7 @@ static int t4k37_power_on(struct device *dev)
 	if (ret)
 		goto reg_disable;
 
-	gpiod_set_value_cansleep(t4k37->reset_gpio, 1);
+	gpiod_set_value_cansleep(t4k37->reset_gpio, 0);
 
 	/* Waiting for device to power up */
 	usleep_range(20000, 21000);
@@ -855,7 +855,7 @@ static int t4k37_power_off(struct device *dev)
 	struct t4k37 *t4k37 = to_t4k37(sd);
 	int ret;
 
-	gpiod_set_value_cansleep(t4k37->reset_gpio, 0);
+	gpiod_set_value_cansleep(t4k37->reset_gpio, 1);
 
 	ret = regulator_bulk_disable(T4K37_NUM_SUPPLIES, t4k37->supplies);
 	if (ret)
@@ -935,7 +935,7 @@ static int t4k37_probe(struct i2c_client *client)
 	if (ret)
 		return dev_err_probe(t4k37->dev, ret, "Failed to get regulators");
 
-	t4k37->reset_gpio = devm_gpiod_get(t4k37->dev, "reset", GPIOD_OUT_HIGH);
+	t4k37->reset_gpio = devm_gpiod_get(t4k37->dev, "reset", GPIOD_OUT_LOW);
 	if (IS_ERR(t4k37->reset_gpio))
 		return dev_err_probe(t4k37->dev, PTR_ERR(t4k37->reset_gpio), "Failed to get the reset gpio");
 
