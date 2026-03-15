@@ -533,6 +533,7 @@ static int t4k37_enum_mbus_code(struct v4l2_subdev *sd,
 {
 	struct t4k37 *t4k37 = to_t4k37(sd);
 
+	dev_info(t4k37->dev, "code->index: %d", code->index);
 	if (code->index >= ARRAY_SIZE(t4k37_modes)) {
 		dev_err(t4k37->dev, "Code index out of range");
 		return -EINVAL;
@@ -550,6 +551,7 @@ static int t4k37_enum_frame_size(struct v4l2_subdev *sd,
 	struct t4k37 *t4k37 = to_t4k37(sd);
 	struct t4k37_mode *mode;
 
+	dev_info(t4k37->dev, "fsize->index: %d", fsize->index);
 	if (fsize->index >= ARRAY_SIZE(t4k37_modes)) {
 		dev_err(t4k37->dev, "Frame size index out of range");
 		return -EINVAL;
@@ -827,6 +829,8 @@ static int t4k37_power_on(struct device *dev)
 	struct t4k37 *t4k37 = to_t4k37(sd);
 	int ret;
 
+	gpiod_set_value_cansleep(t4k37->reset_gpio, 1);
+	
 	ret = regulator_bulk_enable(T4K37_NUM_SUPPLIES, t4k37->supplies);
 	if (ret)
 		return ret;

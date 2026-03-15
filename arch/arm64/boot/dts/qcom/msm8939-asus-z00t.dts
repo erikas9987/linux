@@ -87,7 +87,7 @@
 		pinctrl-names = "default";
 	};
 	
-	cam_vdig_rear_vreg: cam-vana-rear-regulator {
+	cam_vdig_rear_vreg: cam-vdig-rear-regulator {
 		compatible = "regulator-fixed";
 		regulator-name = "cam_vdig_rear_vreg";
 		startup-delay-us = <0>;
@@ -257,7 +257,7 @@
 	dw9714: actuator@c {
 		compatible = "dongwoon,dw9714";
 		reg = <0x0c>;
-		powerdown-gpios = <&tlmm 49 GPIO_ACTIVE_HIGH>;
+		powerdown-gpios = <&tlmm 49 GPIO_ACTIVE_LOW>;
 		vcc-supply = <&pm8916_l10>;
 
 		pinctrl-0 = <&cam_af_pwdn_default>;
