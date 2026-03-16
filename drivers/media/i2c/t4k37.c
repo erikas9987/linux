@@ -12,6 +12,7 @@
 #include <media/v4l2-fwnode.h>
 #include <media/v4l2-subdev.h>
 
+#define T4K37_REG_CHIP_ID CCI_REG16(0x0000)
 #define T4K37_REG_MODE_SELECT CCI_REG8(0x0100)
 #define T4K37_REG_VT_PIX_CLK_DIV CCI_REG8(0x0301)
 #define T4K37_REG_VT_SYS_CLK_DIV CCI_REG8(0x0303)
@@ -23,6 +24,7 @@
 
 #define T4K37_EXTCLK_RATE 19200000
 #define T4K37_NUM_SUPPLIES 3
+#define T4K37_CHIP_ID 0x1C21
 
 #define T4K37_MODE(_width, _height, _fps, _regs) {	\
 	.width = _width,				\
@@ -957,6 +959,14 @@ static int t4k37_probe(struct i2c_client *client)
 	ret = t4k37_power_on(t4k37->dev);
 	if (ret)
 		return dev_err_probe(t4k37->dev, ret, "Failed to power on sensor");
+
+	u64 chip_id;
+	cci_read(t4k37->regmap, T4K37_REG_CHIP_ID, &chip_id, &ret);
+	if (ret)
+		return dev_err_probe(t4k37->dev, ret, "Failed to read chip ID");
+
+	if (chip_id != T4K37_CHIP_ID)
+		dev_warn(t4k37->dev, "Mismatched chip id, expected 0x%04x, received 0x%04llx, continuing anyway", T4K37_CHIP_ID, chip_id);
 	
 	v4l2_ctrl_handler_init(&t4k37->ctrl_handler, 1);
 	t4k37->pixel_rate = v4l2_ctrl_new_std(&t4k37->ctrl_handler, NULL, V4L2_CID_PIXEL_RATE, 0, INT_MAX, 1, t4k37_calc_pixel_rate(t4k37));
