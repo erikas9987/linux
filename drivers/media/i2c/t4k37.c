@@ -1,3 +1,4 @@
+#include "linux/array_size.h"
 #include <linux/clk.h>
 #include <linux/i2c.h>
 #include <linux/module.h>
@@ -18,6 +19,10 @@
 #define T4K37_REG_VT_SYS_CLK_DIV CCI_REG8(0x0303)
 #define T4K37_REG_PRE_PLL_CLK_DIV CCI_REG8(0x0305)
 #define T4K37_PLL_MULTIPLIER CCI_REG16(0x030E)
+#define T4K37_REG_TEST_PATTERN CCI_REG16(0x0600)
+
+#define T4K37_TEST_PATTERN_DISABLE 0
+#define T4K37_TEST_PATTERN_ENABLE 1
 
 #define T4K37_MODE_STANDBY 0x00
 #define T4K37_MODE_STREAMING 0x01
@@ -43,6 +48,16 @@ struct t4k37_mode {
 
 	const struct cci_reg_sequence *regs;
 	size_t num_regs;
+};
+
+static const char * const t4k37_test_pattern_menu[] = {
+	"Disabled",
+	"Enabled",
+};
+
+static const int t4k37_test_pattern_val[] = {
+	T4K37_TEST_PATTERN_DISABLE,
+	T4K37_TEST_PATTERN_ENABLE,
 };
 
 struct t4k37 {
@@ -659,7 +674,7 @@ static int t4k37_calc_pixel_rate(struct t4k37 *t4k37)
 	do_div(pixel_rate, div);
 	pixel_rate *= pll_mult;
 
-	return 0;
+	return pixel_rate;
 }
 
 static int t4k37_set_format(struct v4l2_subdev *sd,
@@ -806,6 +821,29 @@ err_put:
 	return ret;
 }
 
+static int t4k37_set_ctrl(struct v4l2_ctrl *ctrl)
+{
+	struct t4k37 *t4k37 =
+		container_of(ctrl->handler, struct t4k37, ctrl_handler);
+	int ret;
+	
+	if (!pm_runtime_get_if_in_use(t4k37->dev))
+		return 0;
+
+	switch (ctrl->id) {
+	case V4L2_CID_TEST_PATTERN:
+		cci_write(t4k37->regmap, T4K37_REG_TEST_PATTERN, t4k37_test_pattern_val[ctrl->val], &ret);
+		break;
+	default:
+		ret = -EINVAL;
+		break;
+	}
+
+	pm_runtime_put(t4k37->dev);
+
+	return ret;
+}
+
 /* TODO: Let's hope it translates one-to-one from tsb.c */
 static const struct v4l2_subdev_video_ops t4k37_video_ops = {
 	.s_stream = t4k37_s_stream,
@@ -822,6 +860,10 @@ static const struct v4l2_subdev_pad_ops t4k37_pad_ops = {
 static const struct v4l2_subdev_ops t4k37_subdev_ops = {
 	.video = &t4k37_video_ops,
 	.pad = &t4k37_pad_ops,
+};
+
+static const struct v4l2_ctrl_ops t4k37_ctrl_ops = {
+	.s_ctrl = t4k37_set_ctrl,
 };
 
 static int t4k37_power_on(struct device *dev)
@@ -969,7 +1011,9 @@ static int t4k37_probe(struct i2c_client *client)
 		dev_warn(t4k37->dev, "Mismatched chip id, expected 0x%04x, received 0x%04llx, continuing anyway", T4K37_CHIP_ID, chip_id);
 	
 	v4l2_ctrl_handler_init(&t4k37->ctrl_handler, 1);
-	t4k37->pixel_rate = v4l2_ctrl_new_std(&t4k37->ctrl_handler, NULL, V4L2_CID_PIXEL_RATE, 0, INT_MAX, 1, t4k37_calc_pixel_rate(t4k37));
+	t4k37->pixel_rate = v4l2_ctrl_new_std(&t4k37->ctrl_handler, &t4k37_ctrl_ops, V4L2_CID_PIXEL_RATE, 0, INT_MAX, 1, t4k37_calc_pixel_rate(t4k37));
+	v4l2_ctrl_new_std_menu_items(&t4k37->ctrl_handler, &t4k37_ctrl_ops, V4L2_CID_TEST_PATTERN, ARRAY_SIZE(t4k37_test_pattern_menu) - 1, 0, 0, t4k37_test_pattern_menu);
+
 	ret = t4k37->ctrl_handler.error;
 	if (ret) {
 		err = "create a v4l2 ctrl handler";
