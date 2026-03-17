@@ -240,8 +240,8 @@
 			reg = <0>;
 
 			csiphy0_ep: endpoint {
-				clock-lanes = <1>;
-				data-lanes = <0 2 3 4>;
+				clock-lanes = <0>;
+				data-lanes = <1 2 3 4>;
 				bus-type = <MEDIA_BUS_TYPE_CSI2_DPHY>;
 				remote-endpoint = <&t4k37_ep>;
 			};
@@ -288,7 +288,7 @@
 
 		port {
 			t4k37_ep: endpoint {
-				data-lanes = <0 2 3 4>;
+				data-lanes = <1 2 3 4>;
 				remote-endpoint = <&csiphy0_ep>;
 			};
 		};
