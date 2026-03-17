@@ -1,4 +1,4 @@
-#include "linux/array_size.h"
+#include "linux/dev_printk.h"
 #include <linux/clk.h>
 #include <linux/i2c.h>
 #include <linux/module.h>
@@ -15,14 +15,18 @@
 
 #define T4K37_REG_CHIP_ID CCI_REG16(0x0000)
 #define T4K37_REG_MODE_SELECT CCI_REG8(0x0100)
+#define T4K37_REG_GROUP_PARA_HOLD CCI_REG8(0x0104)
 #define T4K37_REG_VT_PIX_CLK_DIV CCI_REG8(0x0301)
 #define T4K37_REG_VT_SYS_CLK_DIV CCI_REG8(0x0303)
 #define T4K37_REG_PRE_PLL_CLK_DIV CCI_REG8(0x0305)
-#define T4K37_PLL_MULTIPLIER CCI_REG16(0x030E)
+#define T4K37_REG_PLL_MULTIPLIER CCI_REG16(0x030E)
 #define T4K37_REG_TEST_PATTERN CCI_REG16(0x0600)
 
 #define T4K37_TEST_PATTERN_DISABLE 0
 #define T4K37_TEST_PATTERN_ENABLE 1
+
+#define T4K37_GROUP_PARA_HOLD_DISABLE 0x00
+#define T4K37_GROUP_PARA_HOLD_ENABLE 0x01
 
 #define T4K37_MODE_STANDBY 0x00
 #define T4K37_MODE_STREAMING 0x01
@@ -83,10 +87,8 @@ struct t4k37 {
 };
 
 static struct cci_reg_sequence const t4k37_init_settings[] = {
-	{CCI_REG8(0x0104), 0x01},	// -/-/-/-/-/-/-/GROUP_PARA_HOLD;
 	{CCI_REG8(0x0101), 0x00},	// -/-/-/-/-/-/IMAGE_ORIENT[1:0];
 	{CCI_REG8(0x0103), 0x00},	// -/-/-/-/-/-/MIPI_RST/SOFTWARE_RESET;
-	{CCI_REG8(0x0104), 0x00},	// -/-/-/-/-/-/-/GROUP_PARA_HOLD;
 	{CCI_REG8(0x0105), 0x00},	// -/-/-/-/-/-/-/MSK_CORRUPT_FR;
 	{CCI_REG8(0x0110), 0x00},	// -/-/-/-/-/CSI_CHAN_IDNTF[2:0];
 	{CCI_REG8(0x0111), 0x02},	// -/-/-/-/-/-/CSI_SIGNAL_MOD[1:0];
@@ -123,7 +125,7 @@ static struct cci_reg_sequence const t4k37_init_settings[] = {
 	{CCI_REG8(0x0307), 0xDA},	// PLL_MULTIPLIER[7:0];
 	{CCI_REG8(0x030B), 0x04},	// -/-/-/-/OP_SYS_CLK_DIV[3:0];
 	{CCI_REG8(0x030D), 0x03},	// -/-/-/-/-/PRE_PLL_ST_CLK_DIV[2:0];
-	{T4K37_PLL_MULTIPLIER, 0x87},	// -/-/-/-/-/-/-/PLL_MULT_ST[8];
+	{T4K37_REG_PLL_MULTIPLIER, 0x87},	// -/-/-/-/-/-/-/PLL_MULT_ST[8];
 	{CCI_REG8(0x0310), 0x00},	// -/-/-/-/-/-/-/OPCK_PLLSEL;
 	{CCI_REG8(0x0340), 0x0C},	// FR_LENGTH_LINES[15:8];
 	{CCI_REG8(0x0341), 0x48},	// FR_LENGTH_LINES[7:0];
@@ -415,7 +417,6 @@ static struct cci_reg_sequence const t4k37_init_settings[] = {
 };
 
 static struct cci_reg_sequence const t4k37_mode_4112x3088_30_regs[] = {
-	{CCI_REG8(0x0104), 0x01},
 	{CCI_REG8(0x0113), 0x0A},	// CSI_DATA_FORMAT[7:0];
 	{T4K37_REG_VT_PIX_CLK_DIV, 0x01},	// -/-/-/-/VT_PIX_CLK_DIV[3:0];
 	{T4K37_REG_VT_SYS_CLK_DIV, 0x06},	// -/-/-/-/VT_SYS_CLK_DIV[3:0];
@@ -452,7 +453,6 @@ static struct cci_reg_sequence const t4k37_mode_4112x3088_30_regs[] = {
 };
 
 static struct cci_reg_sequence const t4k37_mode_3280x2464_30_regs[] = {
-	{CCI_REG8(0x0104), 0x01},
 	{CCI_REG8(0x0113), 0x0A},	// CSI_DATA_FORMAT[7:0];
 	{T4K37_REG_VT_PIX_CLK_DIV, 0x01},	// -/-/-/-/VT_PIX_CLK_DIV[3:0];
 	{T4K37_REG_VT_SYS_CLK_DIV, 0x06},	// -/-/-/-/VT_SYS_CLK_DIV[3:0];
@@ -493,7 +493,6 @@ static struct cci_reg_sequence const t4k37_mode_3280x2464_30_regs[] = {
 };
 
 static struct cci_reg_sequence const t4k37_mode_2064x1552_30_regs[] = {	
-	{CCI_REG8(0x0104), 0x01},
 	{CCI_REG8(0x0113), 0x0A},	// CSI_DATA_FORMAT[7:0];
 	{T4K37_REG_VT_PIX_CLK_DIV, 0x02},	// -/-/-/-/VT_PIX_CLK_DIV[3:0];
 	{T4K37_REG_VT_SYS_CLK_DIV, 0x08},	// -/-/-/-/VT_SYS_CLK_DIV[3:0];
@@ -663,7 +662,7 @@ static int t4k37_calc_pixel_rate(struct t4k37 *t4k37)
 		vt_pix_clk_div = 1;
 
 	// FIXME: This reads one byte when it should read two
-	cci_read(t4k37->regmap, T4K37_PLL_MULTIPLIER, &pll_mult, &ret);
+	cci_read(t4k37->regmap, T4K37_REG_PLL_MULTIPLIER, &pll_mult, &ret);
 	if (ret) {
 		dev_err(t4k37->dev, "Failed to read pll_multiplier_l: %pe", ERR_PTR(ret));
 		return ret;
@@ -746,6 +745,12 @@ static int t4k37_start_streaming(struct t4k37 *t4k37)
 	int ret;
 	guard(mutex)(&t4k37->lock);
 
+	cci_write(t4k37->regmap, T4K37_REG_GROUP_PARA_HOLD, T4K37_GROUP_PARA_HOLD_ENABLE, &ret);
+	if (ret) {
+		dev_err(t4k37->dev, "Failed to enable group parameter hold: %pe", ERR_PTR(ret));
+		return ret;
+	}
+
 	ret = cci_multi_reg_write(t4k37->regmap,
 			      t4k37_init_settings,
 			      ARRAY_SIZE(t4k37_init_settings), NULL);
@@ -759,6 +764,12 @@ static int t4k37_start_streaming(struct t4k37 *t4k37)
 			      t4k37->current_mode->num_regs, NULL);
 	if (ret) {
 		dev_err(t4k37->dev, "Failed to set current mode: %pe", ERR_PTR(ret));
+		return ret;
+	}
+
+	cci_write(t4k37->regmap, T4K37_REG_GROUP_PARA_HOLD, T4K37_GROUP_PARA_HOLD_DISABLE, &ret);
+	if (ret) {
+		dev_err(t4k37->dev, "Failed to disable group parameter hold: %pe", ERR_PTR(ret));
 		return ret;
 	}
 
@@ -777,7 +788,7 @@ static int t4k37_stop_streaming(struct t4k37 *t4k37)
 	
 	guard(mutex)(&t4k37->lock);
 
-	ret = regmap_write(t4k37->regmap, T4K37_REG_MODE_SELECT, T4K37_MODE_STANDBY);
+	cci_write(t4k37->regmap, T4K37_REG_MODE_SELECT, T4K37_MODE_STANDBY, &ret);
 	if (ret)
 		dev_err(t4k37->dev, "Failed to stop streaming: %pe", ERR_PTR(ret));
 
@@ -976,6 +987,7 @@ static int t4k37_probe(struct i2c_client *client)
 	if (t4k37->extclk_rate != T4K37_EXTCLK_RATE)
 		dev_warn(t4k37->dev, "Mismatched extclk: %d provided while %d expected, continuing anyway", t4k37->extclk_rate, T4K37_EXTCLK_RATE);
 
+	dev_info(t4k37->dev, "extclk rate: %d", t4k37->extclk_rate);
 	t4k37->supplies[0].supply = "avdd";
 	t4k37->supplies[1].supply = "dvdd";
 	t4k37->supplies[2].supply = "vio";
@@ -1007,10 +1019,11 @@ static int t4k37_probe(struct i2c_client *client)
 	if (ret)
 		return dev_err_probe(t4k37->dev, ret, "Failed to read chip ID");
 
+	dev_info(t4k37->dev, "Chip id: 0x%04llx", chip_id);
 	if (chip_id != T4K37_CHIP_ID)
 		dev_warn(t4k37->dev, "Mismatched chip id, expected 0x%04x, received 0x%04llx, continuing anyway", T4K37_CHIP_ID, chip_id);
 	
-	v4l2_ctrl_handler_init(&t4k37->ctrl_handler, 1);
+	v4l2_ctrl_handler_init(&t4k37->ctrl_handler, 2);
 	t4k37->pixel_rate = v4l2_ctrl_new_std(&t4k37->ctrl_handler, &t4k37_ctrl_ops, V4L2_CID_PIXEL_RATE, 0, INT_MAX, 1, t4k37_calc_pixel_rate(t4k37));
 	v4l2_ctrl_new_std_menu_items(&t4k37->ctrl_handler, &t4k37_ctrl_ops, V4L2_CID_TEST_PATTERN, ARRAY_SIZE(t4k37_test_pattern_menu) - 1, 0, 0, t4k37_test_pattern_menu);
 
