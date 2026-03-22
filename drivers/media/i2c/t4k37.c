@@ -1043,13 +1043,21 @@ static int t4k37_probe(struct i2c_client *client)
 	}
 	t4k37->ctrl_handler.lock = &t4k37->lock;
 
-	t4k37->sd.flags = V4L2_SUBDEV_FL_HAS_DEVNODE;
+	t4k37->sd.flags |= V4L2_SUBDEV_FL_HAS_DEVNODE;
 	t4k37->pad.flags = MEDIA_PAD_FL_SOURCE;
+	t4k37->sd.dev = t4k37->dev;
 	t4k37->sd.entity.function = MEDIA_ENT_F_CAM_SENSOR;
+
 	ret = media_entity_pads_init(&t4k37->sd.entity, 1, &t4k37->pad);
 	if (ret) {
 		err = "create media entity pads";
 		goto free_ctrl;
+	}
+
+	ret = v4l2_subdev_init_finalize(&t4k37->sd);
+	if (ret) {
+		err = "finalize v4l2 subdev";
+		goto free_entity;
 	}
 	
 	ret = v4l2_async_register_subdev_sensor(&t4k37->sd);
