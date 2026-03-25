@@ -1,4 +1,3 @@
-#include "linux/dev_printk.h"
 #include <linux/clk.h>
 #include <linux/i2c.h>
 #include <linux/module.h>
@@ -964,6 +963,28 @@ static int t4k37_parse_fwnode(struct t4k37 *t4k37)
 	return ret;
 }
 
+static int t4k37_init_state(struct v4l2_subdev *sd,
+			    struct v4l2_subdev_state *sd_state)
+{
+	struct t4k37 *t4k37 = to_t4k37(sd);
+
+	struct v4l2_subdev_format fmt = {
+		.which = V4L2_SUBDEV_FORMAT_TRY,
+		.pad = 0,
+		.format = {
+			.code = MEDIA_BUS_FMT_SGRBG10_1X10,
+			.width = t4k37->current_mode->width,
+			.height = t4k37->current_mode->height,
+		},
+	};
+
+	return t4k37_set_format(sd, sd_state, &fmt);
+}
+
+static const struct v4l2_subdev_internal_ops t4k37_internal_ops = {
+	.init_state = t4k37_init_state,
+};
+
 static int t4k37_probe(struct i2c_client *client)
 {
 	struct t4k37 *t4k37;
@@ -1011,6 +1032,7 @@ static int t4k37_probe(struct i2c_client *client)
 	t4k37->streaming = false;
 
 	v4l2_i2c_subdev_init(&t4k37->sd, client, &t4k37_subdev_ops);
+	t4k37->sd.internal_ops = &t4k37_internal_ops;
 
 	ret = t4k37_power_on(t4k37->dev);
 	if (ret)
