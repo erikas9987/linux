@@ -254,15 +254,15 @@
 };
 
 &cci_i2c0 {
-	dw9714: actuator@c {
-		compatible = "dongwoon,dw9714";
-		reg = <0x0c>;
-		powerdown-gpios = <&tlmm 49 GPIO_ACTIVE_LOW>;
-		vcc-supply = <&pm8916_l10>;
-
-		pinctrl-0 = <&cam_af_pwdn_default>;
-		pinctrl-names = "default";
-	};
+	/* dw9714: actuator@c { */
+	/* 	compatible = "dongwoon,dw9714"; */
+	/* 	reg = <0x0c>; */
+	/* 	powerdown-gpios = <&tlmm 49 GPIO_ACTIVE_LOW>; */
+	/* 	vcc-supply = <&pm8916_l10>; */
+	/**/
+	/* 	pinctrl-0 = <&cam_af_pwdn_default>; */
+	/* 	pinctrl-names = "default"; */
+	/* }; */
 
 	camera-rear@36 {
 		compatible = "toshiba,t4k37";
@@ -284,7 +284,7 @@
 		pinctrl-0 = <&camera_rear_default>;
 		pinctrl-names = "default";
 
-		lens-focus = <&dw9714>;
+		/* lens-focus = <&dw9714>; */
 
 		port {
 			t4k37_ep: endpoint {
@@ -486,12 +486,12 @@
 		bias-disable;
 	};
 
-	cam_af_pwdn_default: cam-af-pwdn-default-state {
-		pins = "gpio49";
-		function = "gpio";
-		drive-strength = <2>;
-		bias-disable;
-	};
+	/* cam_af_pwdn_default: cam-af-pwdn-default-state { */
+	/* 	pins = "gpio49"; */
+	/* 	function = "gpio"; */
+	/* 	drive-strength = <2>; */
+	/* 	bias-disable; */
+	/* }; */
 
 	sd_vmmc_en_default: sd-vmmc-en-default-state {
 		pins = "gpio87";
