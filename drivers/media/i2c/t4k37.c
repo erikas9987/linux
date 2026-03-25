@@ -87,8 +87,10 @@ struct t4k37 {
 };
 
 static struct cci_reg_sequence const t4k37_init_settings[] = {
+	{T4K37_REG_GROUP_PARA_HOLD, T4K37_GROUP_PARA_HOLD_ENABLE},
 	{CCI_REG8(0x0101), 0x00},	// -/-/-/-/-/-/IMAGE_ORIENT[1:0];
 	{CCI_REG8(0x0103), 0x00},	// -/-/-/-/-/-/MIPI_RST/SOFTWARE_RESET;
+	{T4K37_REG_GROUP_PARA_HOLD, T4K37_GROUP_PARA_HOLD_DISABLE},
 	{CCI_REG8(0x0105), 0x00},	// -/-/-/-/-/-/-/MSK_CORRUPT_FR;
 	{CCI_REG8(0x0110), 0x00},	// -/-/-/-/-/CSI_CHAN_IDNTF[2:0];
 	{CCI_REG8(0x0111), 0x02},	// -/-/-/-/-/-/CSI_SIGNAL_MOD[1:0];
@@ -745,17 +747,17 @@ static int t4k37_start_streaming(struct t4k37 *t4k37)
 	int ret;
 	guard(mutex)(&t4k37->lock);
 
-	cci_write(t4k37->regmap, T4K37_REG_GROUP_PARA_HOLD, T4K37_GROUP_PARA_HOLD_ENABLE, &ret);
-	if (ret) {
-		dev_err(t4k37->dev, "Failed to enable group parameter hold: %pe", ERR_PTR(ret));
-		return ret;
-	}
-
 	ret = cci_multi_reg_write(t4k37->regmap,
 			      t4k37_init_settings,
 			      ARRAY_SIZE(t4k37_init_settings), NULL);
 	if (ret) {
 		dev_err(t4k37->dev, "Failed to write init settings: %pe", ERR_PTR(ret));
+		return ret;
+	}
+
+	cci_write(t4k37->regmap, T4K37_REG_GROUP_PARA_HOLD, T4K37_GROUP_PARA_HOLD_ENABLE, &ret);
+	if (ret) {
+		dev_err(t4k37->dev, "Failed to enable group parameter hold: %pe", ERR_PTR(ret));
 		return ret;
 	}
 
