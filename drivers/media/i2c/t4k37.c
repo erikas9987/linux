@@ -746,14 +746,6 @@ static int t4k37_start_streaming(struct t4k37 *t4k37)
 	int ret;
 	guard(mutex)(&t4k37->lock);
 
-	ret = cci_multi_reg_write(t4k37->regmap,
-			      t4k37_init_settings,
-			      ARRAY_SIZE(t4k37_init_settings), NULL);
-	if (ret) {
-		dev_err(t4k37->dev, "Failed to write init settings: %pe", ERR_PTR(ret));
-		return ret;
-	}
-
 	cci_write(t4k37->regmap, T4K37_REG_GROUP_PARA_HOLD, T4K37_GROUP_PARA_HOLD_ENABLE, &ret);
 	if (ret) {
 		dev_err(t4k37->dev, "Failed to enable group parameter hold: %pe", ERR_PTR(ret));
@@ -1047,6 +1039,10 @@ static int t4k37_probe(struct i2c_client *client)
 	if (chip_id != T4K37_CHIP_ID)
 		dev_warn(t4k37->dev, "Mismatched chip id, expected 0x%04x, received 0x%04llx, continuing anyway", T4K37_CHIP_ID, chip_id);
 	
+	ret = cci_multi_reg_write(t4k37->regmap, t4k37_init_settings, ARRAY_SIZE(t4k37_init_settings), NULL);
+	if (ret)
+		return dev_err_probe(t4k37->dev, ret, "Failed to write initial settings");
+
 	v4l2_ctrl_handler_init(&t4k37->ctrl_handler, 2);
 	t4k37->pixel_rate = v4l2_ctrl_new_std(&t4k37->ctrl_handler, &t4k37_ctrl_ops, V4L2_CID_PIXEL_RATE, 0, INT_MAX, 1, t4k37_calc_pixel_rate(t4k37));
 	v4l2_ctrl_new_std_menu_items(&t4k37->ctrl_handler, &t4k37_ctrl_ops, V4L2_CID_TEST_PATTERN, ARRAY_SIZE(t4k37_test_pattern_menu) - 1, 0, 0, t4k37_test_pattern_menu);
