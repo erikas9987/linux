@@ -1043,6 +1043,10 @@ static int t4k37_probe(struct i2c_client *client)
 	if (ret)
 		return dev_err_probe(t4k37->dev, ret, "Failed to write initial settings");
 
+	ret = devm_mutex_init(t4k37->dev, &t4k37->lock);
+	if (ret)
+		return dev_err_probe(t4k37->dev, ret, "Failed to initialize mutex");
+
 	v4l2_ctrl_handler_init(&t4k37->ctrl_handler, 2);
 	t4k37->pixel_rate = v4l2_ctrl_new_std(&t4k37->ctrl_handler, &t4k37_ctrl_ops, V4L2_CID_PIXEL_RATE, 0, INT_MAX, 1, t4k37_calc_pixel_rate(t4k37));
 	v4l2_ctrl_new_std_menu_items(&t4k37->ctrl_handler, &t4k37_ctrl_ops, V4L2_CID_TEST_PATTERN, ARRAY_SIZE(t4k37_test_pattern_menu) - 1, 0, 0, t4k37_test_pattern_menu);
@@ -1056,11 +1060,6 @@ static int t4k37_probe(struct i2c_client *client)
 	t4k37->pixel_rate->flags |= V4L2_CTRL_FLAG_READ_ONLY;
 
 	t4k37->sd.ctrl_handler = &t4k37->ctrl_handler;
-	ret = devm_mutex_init(t4k37->dev, &t4k37->lock);
-	if (ret) {
-		err = "initialize mutex";
-		goto free_ctrl;
-	}
 	t4k37->ctrl_handler.lock = &t4k37->lock;
 
 	t4k37->sd.flags |= V4L2_SUBDEV_FL_HAS_DEVNODE;
