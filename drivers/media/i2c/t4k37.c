@@ -1,3 +1,5 @@
+#include "linux/math64.h"
+#include "linux/v4l2-controls.h"
 #include <linux/clk.h>
 #include <linux/i2c.h>
 #include <linux/module.h>
@@ -29,6 +31,9 @@
 
 #define T4K37_MODE_STANDBY 0x00
 #define T4K37_MODE_STREAMING 0x01
+
+#define T4K37_DEFAULT_PLL_CLK_DIV 3
+#define T4K37_DEFAULT_PLL_MULTIPLIER 0x87
 
 #define T4K37_EXTCLK_RATE 19200000
 #define T4K37_NUM_SUPPLIES 3
@@ -74,6 +79,7 @@ struct t4k37 {
 	const struct t4k37_mode *current_mode;
 	struct v4l2_ctrl_handler ctrl_handler;
 	struct v4l2_ctrl *pixel_rate;
+	struct v4l2_ctrl *link_freq;
 	struct v4l2_fract frame_interval;
 
 	struct media_pad pad;
@@ -83,6 +89,8 @@ struct t4k37 {
 
 	u32 nlanes;
 	u32 extclk_rate;
+	u64 pixel_clock;
+	u64 default_link_freq;
 };
 
 static struct cci_reg_sequence const t4k37_init_settings[] = {
@@ -121,12 +129,12 @@ static struct cci_reg_sequence const t4k37_init_settings[] = {
 	{CCI_REG8(0x0235), 0x19},	// HDR_SHT_INTEGR_TIM[7:0];
 	{T4K37_REG_VT_PIX_CLK_DIV, 0x02},	// -/-/-/-/VT_PIX_CLK_DIV[3:0];
 	{T4K37_REG_VT_SYS_CLK_DIV, 0x08},	// -/-/-/-/VT_SYS_CLK_DIV[3:0];
-	{T4K37_REG_PRE_PLL_CLK_DIV, 0x03},	// -/-/-/-/-/PRE_PLL_CLK_DIV[2:0];
+	{T4K37_REG_PRE_PLL_CLK_DIV, T4K37_DEFAULT_PLL_CLK_DIV},	// -/-/-/-/-/PRE_PLL_CLK_DIV[2:0];
 	{CCI_REG8(0x0306), 0x00},	// -/-/-/-/-/-/-/PLL_MULTIPLIER[8];
 	{CCI_REG8(0x0307), 0xDA},	// PLL_MULTIPLIER[7:0];
 	{CCI_REG8(0x030B), 0x04},	// -/-/-/-/OP_SYS_CLK_DIV[3:0];
 	{CCI_REG8(0x030D), 0x03},	// -/-/-/-/-/PRE_PLL_ST_CLK_DIV[2:0];
-	{T4K37_REG_PLL_MULTIPLIER, 0x87},	// -/-/-/-/-/-/-/PLL_MULT_ST[8];
+	{T4K37_REG_PLL_MULTIPLIER, T4K37_DEFAULT_PLL_MULTIPLIER},	// -/-/-/-/-/-/-/PLL_MULT_ST[8];
 	{CCI_REG8(0x0310), 0x00},	// -/-/-/-/-/-/-/OPCK_PLLSEL;
 	{CCI_REG8(0x0340), 0x0C},	// FR_LENGTH_LINES[15:8];
 	{CCI_REG8(0x0341), 0x48},	// FR_LENGTH_LINES[7:0];
@@ -421,7 +429,7 @@ static struct cci_reg_sequence const t4k37_mode_4112x3088_30_regs[] = {
 	{CCI_REG8(0x0113), 0x0A},	// CSI_DATA_FORMAT[7:0];
 	{T4K37_REG_VT_PIX_CLK_DIV, 0x01},	// -/-/-/-/VT_PIX_CLK_DIV[3:0];
 	{T4K37_REG_VT_SYS_CLK_DIV, 0x06},	// -/-/-/-/VT_SYS_CLK_DIV[3:0];
-	{T4K37_REG_PRE_PLL_CLK_DIV, 0x03},	// -/-/-/-/-/PRE_PLL_CLK_DIV[2:0];
+	{T4K37_REG_PRE_PLL_CLK_DIV, T4K37_DEFAULT_PLL_CLK_DIV},	// -/-/-/-/-/PRE_PLL_CLK_DIV[2:0];
 	{CCI_REG8(0x030B), 0x01},	// -/-/-/-/OP_SYS_CLK_DIV[3:0];
 	{CCI_REG8(0x0340), 0x0C},	// FR_LENGTH_LINES[15:8];
 	{CCI_REG8(0x0341), 0x48},	// FR_LENGTH_LINES[7:0];
@@ -457,7 +465,7 @@ static struct cci_reg_sequence const t4k37_mode_3280x2464_30_regs[] = {
 	{CCI_REG8(0x0113), 0x0A},	// CSI_DATA_FORMAT[7:0];
 	{T4K37_REG_VT_PIX_CLK_DIV, 0x01},	// -/-/-/-/VT_PIX_CLK_DIV[3:0];
 	{T4K37_REG_VT_SYS_CLK_DIV, 0x06},	// -/-/-/-/VT_SYS_CLK_DIV[3:0];
-	{T4K37_REG_PRE_PLL_CLK_DIV, 0x03},	// -/-/-/-/-/PRE_PLL_CLK_DIV[2:0];
+	{T4K37_REG_PRE_PLL_CLK_DIV, T4K37_DEFAULT_PLL_CLK_DIV},	// -/-/-/-/-/PRE_PLL_CLK_DIV[2:0];
 	{CCI_REG8(0x030B), 0x01},	// -/-/-/-/OP_SYS_CLK_DIV[3:0];
 	{CCI_REG8(0x0340), 0x0C},	// FR_LENGTH_LINES[15:8];
 	{CCI_REG8(0x0341), 0x48},	// FR_LENGTH_LINES[7:0];
@@ -497,7 +505,7 @@ static struct cci_reg_sequence const t4k37_mode_2064x1552_30_regs[] = {
 	{CCI_REG8(0x0113), 0x0A},	// CSI_DATA_FORMAT[7:0];
 	{T4K37_REG_VT_PIX_CLK_DIV, 0x02},	// -/-/-/-/VT_PIX_CLK_DIV[3:0];
 	{T4K37_REG_VT_SYS_CLK_DIV, 0x08},	// -/-/-/-/VT_SYS_CLK_DIV[3:0];
-	{T4K37_REG_PRE_PLL_CLK_DIV, 0x03},	// -/-/-/-/-/PRE_PLL_CLK_DIV[2:0];
+	{T4K37_REG_PRE_PLL_CLK_DIV, T4K37_DEFAULT_PLL_CLK_DIV},	// -/-/-/-/-/PRE_PLL_CLK_DIV[2:0];
 	{CCI_REG8(0x030B), 0x03},	// -/-/-/-/OP_SYS_CLK_DIV[3:0];
 	{CCI_REG8(0x0340), 0x06},	// FR_LENGTH_LINES[15:8];
 	{CCI_REG8(0x0341), 0x30},	// FR_LENGTH_LINES[7:0];
@@ -696,7 +704,8 @@ static int t4k37_set_format(struct v4l2_subdev *sd,
 		t4k37->current_mode = mode;
 		t4k37_fill_pad_format(t4k37, t4k37->current_mode, fmt);
 
-		__v4l2_ctrl_s_ctrl_int64(t4k37->pixel_rate, t4k37_calc_pixel_rate(t4k37));
+		__v4l2_ctrl_s_ctrl_int64(t4k37->pixel_rate, div_u64(t4k37->pixel_clock, 4 * 10));
+		__v4l2_ctrl_s_ctrl_int64(t4k37->link_freq, div_u64(t4k37->pixel_clock * 8, 4 * 10));
 	}
 
 	return 0;
@@ -980,6 +989,7 @@ static const struct v4l2_subdev_internal_ops t4k37_internal_ops = {
 static int t4k37_probe(struct i2c_client *client)
 {
 	struct t4k37 *t4k37;
+	u64 sysclk;
 	char *err;
 	int ret;
 
@@ -1001,6 +1011,10 @@ static int t4k37_probe(struct i2c_client *client)
 	t4k37->extclk_rate = clk_get_rate(t4k37->extclk);
 	if (t4k37->extclk_rate != T4K37_EXTCLK_RATE)
 		dev_warn(t4k37->dev, "Mismatched extclk: %d provided while %d expected, continuing anyway", t4k37->extclk_rate, T4K37_EXTCLK_RATE);
+
+	sysclk = div_u64(t4k37->extclk_rate, T4K37_DEFAULT_PLL_CLK_DIV) * T4K37_DEFAULT_PLL_MULTIPLIER;
+	t4k37->pixel_clock = sysclk * t4k37->nlanes;
+	t4k37->default_link_freq = div_u64(t4k37->pixel_clock * 8, 4 * 10);
 
 	dev_info(t4k37->dev, "extclk rate: %d", t4k37->extclk_rate);
 	t4k37->supplies[0].supply = "avdd";
@@ -1048,7 +1062,9 @@ static int t4k37_probe(struct i2c_client *client)
 		return dev_err_probe(t4k37->dev, ret, "Failed to initialize mutex");
 
 	v4l2_ctrl_handler_init(&t4k37->ctrl_handler, 2);
-	t4k37->pixel_rate = v4l2_ctrl_new_std(&t4k37->ctrl_handler, &t4k37_ctrl_ops, V4L2_CID_PIXEL_RATE, 0, INT_MAX, 1, t4k37_calc_pixel_rate(t4k37));
+	t4k37->pixel_rate = v4l2_ctrl_new_std(&t4k37->ctrl_handler, &t4k37_ctrl_ops, V4L2_CID_PIXEL_RATE, 0, INT_MAX, 1, div_u64(t4k37->pixel_clock, 4 * 10));
+	t4k37->link_freq = v4l2_ctrl_new_std(&t4k37->ctrl_handler, &t4k37_ctrl_ops, V4L2_CID_LINK_FREQ, 0, INT_MAX, 1, t4k37->default_link_freq);
+
 	v4l2_ctrl_new_std_menu_items(&t4k37->ctrl_handler, &t4k37_ctrl_ops, V4L2_CID_TEST_PATTERN, ARRAY_SIZE(t4k37_test_pattern_menu) - 1, 0, 0, t4k37_test_pattern_menu);
 
 	ret = t4k37->ctrl_handler.error;
@@ -1058,6 +1074,7 @@ static int t4k37_probe(struct i2c_client *client)
 	}
 
 	t4k37->pixel_rate->flags |= V4L2_CTRL_FLAG_READ_ONLY;
+	t4k37->link_freq->flags |= V4L2_CTRL_FLAG_READ_ONLY;
 
 	t4k37->sd.ctrl_handler = &t4k37->ctrl_handler;
 	t4k37->ctrl_handler.lock = &t4k37->lock;
