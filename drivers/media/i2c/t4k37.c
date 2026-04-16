@@ -1061,10 +1061,10 @@ static int t4k37_probe(struct i2c_client *client)
 	if (ret)
 		return dev_err_probe(t4k37->dev, ret, "Failed to initialize mutex");
 
-	v4l2_ctrl_handler_init(&t4k37->ctrl_handler, 2);
+	dev_info(t4k37->dev, "Pixel rate: %lld, link freq: %lld", div_u64(t4k37->pixel_clock, 4 * 10), t4k37->default_link_freq);
+	v4l2_ctrl_handler_init(&t4k37->ctrl_handler, 3);
 	t4k37->pixel_rate = v4l2_ctrl_new_std(&t4k37->ctrl_handler, &t4k37_ctrl_ops, V4L2_CID_PIXEL_RATE, 0, INT_MAX, 1, div_u64(t4k37->pixel_clock, 4 * 10));
-	t4k37->link_freq = v4l2_ctrl_new_std(&t4k37->ctrl_handler, &t4k37_ctrl_ops, V4L2_CID_LINK_FREQ, 0, INT_MAX, 1, t4k37->default_link_freq);
-
+	t4k37->link_freq = v4l2_ctrl_new_int_menu(&t4k37->ctrl_handler, &t4k37_ctrl_ops, V4L2_CID_LINK_FREQ, 0, 0, &t4k37->default_link_freq);
 	v4l2_ctrl_new_std_menu_items(&t4k37->ctrl_handler, &t4k37_ctrl_ops, V4L2_CID_TEST_PATTERN, ARRAY_SIZE(t4k37_test_pattern_menu) - 1, 0, 0, t4k37_test_pattern_menu);
 
 	ret = t4k37->ctrl_handler.error;
