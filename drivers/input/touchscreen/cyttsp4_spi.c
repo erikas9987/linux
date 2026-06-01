@@ -14,6 +14,8 @@
  * Contact Cypress Semiconductor at www.cypress.com <ttdrivers@cypress.com>
  */
 
+#define DEBUG
+#define VERBOSE_DEBUG
 #include "cyttsp4_core.h"
 
 #include <linux/delay.h>

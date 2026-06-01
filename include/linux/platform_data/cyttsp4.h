@@ -15,6 +15,7 @@
 #ifndef _CYTTSP4_H_
 #define _CYTTSP4_H_
 
+#include "linux/regulator/consumer.h"
 #define CYTTSP4_MT_NAME "cyttsp4_mt"
 #define CYTTSP4_I2C_NAME "cyttsp4_i2c_adapter"
 #define CYTTSP4_SPI_NAME "cyttsp4_spi_adapter"
@@ -22,7 +23,7 @@
 #define CY_TOUCH_SETTINGS_MAX 32
 
 struct touch_framework {
-	const uint16_t  *abs;
+	uint16_t  *abs;
 	uint8_t         size;
 	uint8_t         enable_vkeys;
 } __packed;
@@ -40,8 +41,6 @@ struct touch_settings {
 } __packed;
 
 struct cyttsp4_core_platform_data {
-	int irq_gpio;
-	int rst_gpio;
 	int level_irq_udelay;
 	int (*xres)(struct cyttsp4_core_platform_data *pdata,
 		struct device *dev);
@@ -49,8 +48,8 @@ struct cyttsp4_core_platform_data {
 		int on, struct device *dev);
 	int (*power)(struct cyttsp4_core_platform_data *pdata,
 		int on, struct device *dev, atomic_t *ignore_irq);
-	int (*irq_stat)(struct cyttsp4_core_platform_data *pdata,
-		struct device *dev);
+	struct gpio_desc *rst_gpio;
+	struct regulator_bulk_data regulators[2];
 	struct touch_settings *sett[CY_TOUCH_SETTINGS_MAX];
 };
 

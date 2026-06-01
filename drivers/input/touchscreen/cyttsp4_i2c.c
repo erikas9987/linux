@@ -14,8 +14,12 @@
  * Contact Cypress Semiconductor at www.cypress.com <ttdrivers@cypress.com>
  */
 
+#define DEBUG
+#define VERBOSE_DEBUG
 #include "cyttsp4_core.h"
 
+#include "linux/mod_devicetable.h"
+#include "linux/module.h"
 #include <linux/i2c.h>
 #include <linux/input.h>
 
@@ -55,10 +59,17 @@ static const struct i2c_device_id cyttsp4_i2c_id[] = {
 };
 MODULE_DEVICE_TABLE(i2c, cyttsp4_i2c_id);
 
+static const struct of_device_id cyttsp4_of_id[] = {
+	{ .compatible = "cypress,cyttsp4" },
+	{ }
+};
+MODULE_DEVICE_TABLE(of, cyttsp4_of_id);
+
 static struct i2c_driver cyttsp4_i2c_driver = {
 	.driver = {
 		.name	= CYTTSP4_I2C_NAME,
 		.pm	= pm_ptr(&cyttsp4_pm_ops),
+		.of_match_table = cyttsp4_of_id,
 	},
 	.probe		= cyttsp4_i2c_probe,
 	.remove		= cyttsp4_i2c_remove,

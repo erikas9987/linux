@@ -325,6 +325,7 @@ struct cyttsp4 {
 	int int_status;
 	wait_queue_head_t wait_q;
 	int irq;
+	struct gpio_desc *rst_gpio;
 	struct work_struct startup_work;
 	struct work_struct watchdog_work;
 	struct timer_list watchdog_timer;

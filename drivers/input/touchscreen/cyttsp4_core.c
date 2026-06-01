@@ -11,8 +11,18 @@
  *
  * Contact Cypress Semiconductor at www.cypress.com <ttdrivers@cypress.com>
  */
+#include "linux/input-event-codes.h"
+#include "linux/property.h"
+#define DEBUG
+#define VERBOSE_DEBUG
 
 #include "cyttsp4_core.h"
+#include "linux/array_size.h"
+#include "linux/gfp_types.h"
+#include "linux/gpio/consumer.h"
+#include "linux/input/touchscreen.h"
+#include "linux/platform_data/cyttsp4.h"
+#include "linux/regulator/consumer.h"
 #include "linux/timer.h"
 #include <linux/delay.h>
 #include <linux/gpio.h>
@@ -2012,25 +2022,158 @@ error_alloc_failed:
 	return rc;
 }
 
+static int cyttsp4_xres(struct cyttsp4_core_platform_data *cpdata, struct device *dev)
+{
+	if (!cpdata->rst_gpio)
+		return -ENOSYS;
+
+	gpiod_set_value_cansleep(cpdata->rst_gpio, 1);
+	msleep(20);
+	gpiod_set_value_cansleep(cpdata->rst_gpio, 0);
+	msleep(40);
+
+	return 0;
+}
+
+static int cyttsp4_power(struct cyttsp4_core_platform_data *cpdata,
+			 int on, struct device *dev, atomic_t *ignore_irq)
+{
+	int ret = 0;
+	if (on)
+		ret = regulator_bulk_enable(ARRAY_SIZE(cpdata->regulators),
+					    cpdata->regulators);
+	else
+		ret = regulator_bulk_disable(ARRAY_SIZE(cpdata->regulators),
+					     cpdata->regulators);
+
+	return ret;
+}
+
+static int cyttsp4_init(struct cyttsp4_core_platform_data *cpdata,
+			 int on, struct device *dev)
+{
+	return 0;
+}
+
+static struct cyttsp4_platform_data *cyttsp4_fill_dts(struct cyttsp4 *cd)
+{
+	int ret, x, y;
+	cd->pdata = kzalloc(sizeof(*cd->pdata), GFP_KERNEL);
+	if (!cd->pdata)
+		return NULL;
+
+	cd->pdata->core_pdata = kzalloc(sizeof(*cd->pdata->core_pdata), GFP_KERNEL);
+	if (!cd->pdata->core_pdata)
+		goto fail_core_pdata;
+
+	cd->pdata->mt_pdata = kzalloc(sizeof(*cd->pdata->mt_pdata), GFP_KERNEL);
+	if (!cd->pdata->mt_pdata)
+		goto fail_mt_pdata;
+
+	cd->pdata->core_pdata->rst_gpio = gpiod_get_optional(cd->dev, "reset", GPIOD_OUT_LOW);
+	if (IS_ERR(cd->pdata->core_pdata->rst_gpio))
+		goto fail_rst_gpio;
+	
+	cd->pdata->core_pdata->xres = cyttsp4_xres;
+	cd->pdata->core_pdata->regulators[0].supply = "vdd";
+	cd->pdata->core_pdata->regulators[1].supply = "vcpin";
+	ret = regulator_bulk_get(cd->dev,
+				 ARRAY_SIZE(cd->pdata->core_pdata->regulators),
+			 	 cd->pdata->core_pdata->regulators);
+	if (ret)
+		goto fail_rg;
+
+	ret = regulator_bulk_enable(ARRAY_SIZE(cd->pdata->core_pdata->regulators),
+				    cd->pdata->core_pdata->regulators);
+	if (ret)
+		goto fail_rg_enable;
+
+	cd->pdata->core_pdata->power = cyttsp4_power;
+	cd->pdata->core_pdata->init = cyttsp4_init;
+
+	cd->pdata->mt_pdata->inp_dev_name = "cyttsp4";
+	if (device_property_read_bool(cd->dev, "touchscreen-inverted-x"))
+		cd->pdata->mt_pdata->flags |= CY_FLAG_INV_X;
+
+	if (device_property_read_bool(cd->dev, "touchscreen-inverted-y"))
+		cd->pdata->mt_pdata->flags |= CY_FLAG_INV_Y;
+	
+	if (device_property_read_bool(cd->dev, "touchscreen-swapped-x-y"))
+		cd->pdata->mt_pdata->flags |= CY_FLAG_FLIP;
+	
+	dev_dbg(cd->dev, "Flags: %d", cd->pdata->mt_pdata->flags);
+	
+	if (device_property_read_u32(cd->dev, "touchscreen-size-x", &x) < 0)
+		x = 540;
+
+	if (device_property_read_u32(cd->dev, "touchscreen-size-y", &y) < 0)
+		y = 960;
+	dev_dbg(cd->dev, "xy: %d, %d", x, y);
+	cd->pdata->mt_pdata->frmwrk = kzalloc(sizeof(*cd->pdata->mt_pdata->frmwrk), GFP_KERNEL);
+	if (!cd->pdata->mt_pdata->frmwrk)
+		goto fail_frmwrk;
+
+	const uint16_t abs[] = {
+		ABS_MT_POSITION_X, 0, x, 0, 0,
+		ABS_MT_POSITION_Y, 0, y, 0, 0,
+		ABS_MT_PRESSURE, 0, 255, 0, 0,
+		CY_IGNORE_VALUE, 0, 255, 0, 0,
+		ABS_MT_TRACKING_ID, 0, 15, 0, 0,
+		ABS_MT_TOUCH_MAJOR, 0, 255, 0, 0,
+		ABS_MT_TOUCH_MINOR, 0, 255, 0, 0,
+		ABS_MT_ORIENTATION, -128, 127, 0, 0
+	};
+	cd->pdata->mt_pdata->frmwrk->abs = kzalloc(sizeof(*cd->pdata->mt_pdata->frmwrk->abs) * ARRAY_SIZE(abs), GFP_KERNEL);
+	if (!cd->pdata->mt_pdata->frmwrk->abs)
+		goto fail_abs;
+
+	memcpy(cd->pdata->mt_pdata->frmwrk->abs, abs, ARRAY_SIZE(abs));
+	cd->pdata->mt_pdata->frmwrk->size = ARRAY_SIZE(abs);
+	cd->pdata->mt_pdata->frmwrk->enable_vkeys = false;
+
+	return cd->pdata;
+fail_abs:
+	kfree(cd->pdata->mt_pdata->frmwrk);
+fail_frmwrk:
+	regulator_bulk_disable(ARRAY_SIZE(cd->pdata->core_pdata->regulators),
+			    cd->pdata->core_pdata->regulators);
+fail_rg_enable:	
+	regulator_bulk_free(ARRAY_SIZE(cd->pdata->core_pdata->regulators),
+			    cd->pdata->core_pdata->regulators);
+fail_rg:
+	gpiod_put(cd->pdata->core_pdata->rst_gpio);
+fail_rst_gpio:
+	kfree(cd->pdata->mt_pdata);
+fail_mt_pdata:
+	kfree(cd->pdata->core_pdata);
+fail_core_pdata:
+	kfree(cd->pdata);
+	return NULL;
+}
+
 struct cyttsp4 *cyttsp4_probe(const struct cyttsp4_bus_ops *ops,
 		struct device *dev, u16 irq, size_t xfer_buf_size)
 {
 	struct cyttsp4 *cd;
-	struct cyttsp4_platform_data *pdata = dev_get_platdata(dev);
+	struct cyttsp4_platform_data *pdata;
 	unsigned long irq_flags;
 	int rc = 0;
 
-	if (!pdata || !pdata->core_pdata || !pdata->mt_pdata) {
-		dev_err(dev, "%s: Missing platform data\n", __func__);
-		rc = -ENODEV;
-		goto error_no_pdata;
-	}
+	dev_info(dev, "Hello?");
 
 	cd = kzalloc(sizeof(*cd), GFP_KERNEL);
 	if (!cd) {
 		dev_err(dev, "%s: Error, kzalloc\n", __func__);
 		rc = -ENOMEM;
 		goto error_alloc_data;
+	}
+	cd->dev = dev;
+
+	pdata = cyttsp4_fill_dts(cd);
+	if (!pdata || !pdata->core_pdata || !pdata->mt_pdata) {
+		dev_err(dev, "%s: Missing platform data\n", __func__);
+		rc = -ENODEV;
+		goto error_no_pdata;
 	}
 
 	cd->xfer_buf = kzalloc(xfer_buf_size, GFP_KERNEL);
@@ -2041,7 +2184,6 @@ struct cyttsp4 *cyttsp4_probe(const struct cyttsp4_bus_ops *ops,
 	}
 
 	/* Initialize device info */
-	cd->dev = dev;
 	cd->pdata = pdata;
 	cd->cpdata = pdata->core_pdata;
 	cd->bus_ops = ops;
@@ -2056,14 +2198,6 @@ struct cyttsp4 *cyttsp4_probe(const struct cyttsp4_bus_ops *ops,
 	/* Initialize works */
 	INIT_WORK(&cd->startup_work, cyttsp4_startup_work_function);
 	INIT_WORK(&cd->watchdog_work, cyttsp4_watchdog_work);
-
-	/* Initialize IRQ */
-	cd->irq = gpio_to_irq(cd->cpdata->irq_gpio);
-	if (cd->irq < 0) {
-		rc = -EINVAL;
-		goto error_free_xfer;
-	}
-
 	dev_set_drvdata(dev, cd);
 
 	/* Call platform init function */
@@ -2077,6 +2211,7 @@ struct cyttsp4 *cyttsp4_probe(const struct cyttsp4_bus_ops *ops,
 	if (rc < 0)
 		dev_err(cd->dev, "%s: HW Init fail r=%d\n", __func__, rc);
 
+	cd->irq = irq;
 	dev_dbg(dev, "%s: initialize threaded irq=%d\n", __func__, cd->irq);
 	if (cd->cpdata->level_irq_udelay > 0)
 		/* use level triggered interrupts */
@@ -2127,9 +2262,18 @@ error_startup:
 error_request_irq:
 	if (cd->cpdata->init)
 		cd->cpdata->init(cd->cpdata, 0, dev);
-error_free_xfer:
 	kfree(cd->xfer_buf);
 error_free_cd:
+	kfree(cd->pdata->mt_pdata->frmwrk->abs);
+	kfree(cd->pdata->mt_pdata->frmwrk);
+	regulator_bulk_disable(ARRAY_SIZE(cd->pdata->core_pdata->regulators),
+			    cd->pdata->core_pdata->regulators);
+	regulator_bulk_free(ARRAY_SIZE(cd->pdata->core_pdata->regulators),
+			    cd->pdata->core_pdata->regulators);
+	gpiod_put(cd->pdata->core_pdata->rst_gpio);
+	kfree(cd->pdata->mt_pdata);
+	kfree(cd->pdata->core_pdata);
+	kfree(cd->pdata);
 	kfree(cd);
 error_alloc_data:
 error_no_pdata:
@@ -2165,6 +2309,17 @@ int cyttsp4_remove(struct cyttsp4 *cd)
 	if (cd->cpdata->init)
 		cd->cpdata->init(cd->cpdata, 0, dev);
 	cyttsp4_free_si_ptrs(cd);
+	kfree(cd->pdata->mt_pdata->frmwrk->abs);
+	kfree(cd->pdata->mt_pdata->frmwrk);
+	regulator_bulk_disable(ARRAY_SIZE(cd->pdata->core_pdata->regulators),
+			    cd->pdata->core_pdata->regulators);
+	regulator_bulk_free(ARRAY_SIZE(cd->pdata->core_pdata->regulators),
+			    cd->pdata->core_pdata->regulators);
+	gpiod_put(cd->pdata->core_pdata->rst_gpio);
+	kfree(cd->pdata->mt_pdata);
+	kfree(cd->pdata->core_pdata);
+	kfree(cd->pdata);
+	kfree(cd);
 	kfree(cd);
 	return 0;
 }
