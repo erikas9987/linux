@@ -27,6 +27,7 @@
 	aliases {
 		bluetooth0 = &bluetooth;
 		hsuart0 = &uart3;
+		i2c17 = &i2c_17;
 		i2c18 = &i2c_18;
 		wifi0 = &wifi;
 	};
@@ -188,8 +189,8 @@
 
 		/* Samsung changed this to 3.3v, but pmic(or mainline) doesn't support that... */
 		vreg_l5a_2p7: ldo5 {
-			regulator-min-microvolt = <2496000>;
-			regulator-max-microvolt = <3000000>;
+			regulator-min-microvolt = <3304000>;
+			regulator-max-microvolt = <3304000>;
 			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
 		};
 
@@ -346,6 +347,7 @@
 			regulator-min-microvolt = <1800000>;
 			regulator-max-microvolt = <1800000>;
 			regulator-initial-mode = <RPMH_REGULATOR_MODE_HPM>;
+			/* regulator-always-on; */
 		};
 
 		vreg_l9c_2p95: ldo9 {
@@ -473,6 +475,14 @@
 };
 
 &pm6150l_gpios {
+	sx9360_int_default: sx9360-int-default-state {
+		pins = "gpio5";
+		function = "normal";
+		power-source = <0>;
+		input-enable;
+		bias-disable;
+	};
+
 	key_vol_up_default: key-vol-up-default-state {
 		pins = "gpio8";
 		function = "normal";
@@ -559,6 +569,31 @@
 };
 
 &soc {
+	i2c_17: i2c-17 {
+		compatible = "i2c-gpio";
+		#address-cells = <1>;
+		#size-cells = <0>;
+		sda-gpios = <&tlmm 51 (GPIO_ACTIVE_HIGH|GPIO_OPEN_DRAIN)>;
+		scl-gpios = <&tlmm 52 (GPIO_ACTIVE_HIGH|GPIO_OPEN_DRAIN)>;
+		pinctrl-0 = <&sx9360_i2c_default>;
+		pinctrl-names = "default";
+		i2c-gpio,delay-us = <2>;
+
+		grip@28 {
+			compatible = "semtech,sx9360";
+			reg = <0x28>;
+			interrupts-extended = <&pm6150l_gpios 5 GPIO_ACTIVE_LOW>;
+			pinctrl-0 = <&sx9360_int_default>;
+			pinctrl-names = "default";
+			vdd-supply = <&vreg_l5a_2p7>;
+			svdd-supply = <&vreg_l10a_1p8>;
+			#io-channel-cells = <1>;
+			semtech,resolution = <1024>;
+			semtech,proxraw-strength = <2>;
+			semtech,avg-pos-strength = <512>;
+		};
+	};
+
 	i2c_18: i2c-18 {
 		compatible = "i2c-gpio";
 		#address-cells = <1>;
@@ -758,6 +793,12 @@
 			bias-pull-up;
 			drive-strength = <2>;
 		};
+	};
+
+	sx9360_i2c_default: sx9360-i2c-default-state {
+		pins = "gpio51", "gpio52";
+		function = "gpio";
+		bias-disable;
 	};
 
 	tas2562_active: tas2562-active-state {
