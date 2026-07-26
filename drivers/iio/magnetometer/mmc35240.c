@@ -193,7 +193,7 @@ struct mmc35240_data {
 	struct i2c_client *client;
 	struct mutex mutex;
 	struct regmap *regmap;
-	struct mmc3xxxx_chip_info *chip_info;
+	const struct mmc3xxxx_chip_info *chip_info;
 	enum mmc35240_resolution res;
 	bool enable_comp;
 
@@ -390,9 +390,9 @@ static int mmc35240_raw_to_mgauss(struct mmc35240_data *data, int index,
 	const struct mmc3xxxx_props_table *ptable;
 	int raw[3];
 	int sens[3];
-	int nfo;
+	int nfo, ret;
 
-	chip_info = &data->chip_info;
+	chip_info = data->chip_info;
 	ptable = &chip_info->props_table[data->res];
 
 	raw[AXIS_X] = le16_to_cpu(buf[AXIS_X]);
@@ -403,9 +403,9 @@ static int mmc35240_raw_to_mgauss(struct mmc35240_data *data, int index,
 	sens[AXIS_Y] = ptable->sens[AXIS_Y];
 	sens[AXIS_Z] = ptable->sens[AXIS_Z];
 
-	nfo = ptable[data->res].nfo;
+	nfo = ptable->nfo;
 
-	ret = chip_info->convert_to_mgauss(raw, sens, nfo, index, cal);
+	ret = chip_info->convert_to_mgauss(raw, sens, nfo, index, val);
 	if (ret < 0)
 		return ret;
 
@@ -431,7 +431,7 @@ static int mmc35240_read_raw(struct iio_dev *indio_dev,
 		mutex_unlock(&data->mutex);
 		if (ret < 0)
 			return ret;
-		ret = mmc35240_convert_to_mgauss(data, chan->address, buf, val);
+		ret = mmc35240_raw_to_mgauss(data, chan->address, buf, val);
 		if (ret < 0)
 			return ret;
 		return IIO_VAL_INT;
