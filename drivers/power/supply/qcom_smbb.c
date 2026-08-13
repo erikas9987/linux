@@ -118,7 +118,7 @@ struct smbb_charger {
 
 	struct power_supply *usb_psy;
 	struct power_supply *dc_psy;
-	struct power_supply *bat_psy;
+	// struct power_supply *bat_psy;
 	struct regmap *regmap;
 
 	struct regulator_desc otg_rdesc;
@@ -414,7 +414,7 @@ static irqreturn_t smbb_bat_temp_handler(int irq, void *_data)
 	}
 	mutex_unlock(&chg->statlock);
 
-	power_supply_changed(chg->bat_psy);
+	// power_supply_changed(chg->bat_psy);
 	return IRQ_HANDLED;
 }
 
@@ -423,7 +423,7 @@ static irqreturn_t smbb_bat_present_handler(int irq, void *_data)
 	struct smbb_charger *chg = _data;
 
 	smbb_set_line_flag(chg, irq, STATUS_BAT_PRESENT);
-	power_supply_changed(chg->bat_psy);
+	// power_supply_changed(chg->bat_psy);
 
 	return IRQ_HANDLED;
 }
@@ -433,7 +433,7 @@ static irqreturn_t smbb_chg_done_handler(int irq, void *_data)
 	struct smbb_charger *chg = _data;
 
 	smbb_set_line_flag(chg, irq, STATUS_CHG_DONE);
-	power_supply_changed(chg->bat_psy);
+	// power_supply_changed(chg->bat_psy);
 
 	return IRQ_HANDLED;
 }
@@ -443,7 +443,7 @@ static irqreturn_t smbb_chg_gone_handler(int irq, void *_data)
 	struct smbb_charger *chg = _data;
 
 	smbb_set_line_flag(chg, irq, STATUS_CHG_GONE);
-	power_supply_changed(chg->bat_psy);
+	// power_supply_changed(chg->bat_psy);
 	power_supply_changed(chg->usb_psy);
 	if (!chg->dc_disabled)
 		power_supply_changed(chg->dc_psy);
@@ -456,7 +456,7 @@ static irqreturn_t smbb_chg_fast_handler(int irq, void *_data)
 	struct smbb_charger *chg = _data;
 
 	smbb_set_line_flag(chg, irq, STATUS_CHG_FAST);
-	power_supply_changed(chg->bat_psy);
+	// power_supply_changed(chg->bat_psy);
 
 	return IRQ_HANDLED;
 }
@@ -466,7 +466,7 @@ static irqreturn_t smbb_chg_trkl_handler(int irq, void *_data)
 	struct smbb_charger *chg = _data;
 
 	smbb_set_line_flag(chg, irq, STATUS_CHG_TRKL);
-	power_supply_changed(chg->bat_psy);
+	// power_supply_changed(chg->bat_psy);
 
 	return IRQ_HANDLED;
 }
@@ -881,14 +881,14 @@ static int smbb_charger_probe(struct platform_device *pdev)
 
 	bat_cfg.drv_data = chg;
 	bat_cfg.fwnode = dev_fwnode(&pdev->dev);
-	chg->bat_psy = devm_power_supply_register(&pdev->dev,
-						  &bat_psy_desc,
-						  &bat_cfg);
-	if (IS_ERR(chg->bat_psy)) {
-		dev_err(&pdev->dev, "failed to register battery\n");
-		return PTR_ERR(chg->bat_psy);
-	}
-
+	// chg->bat_psy = devm_power_supply_register(&pdev->dev,
+	// 					  &bat_psy_desc,
+	// 					  &bat_cfg);
+	// if (IS_ERR(chg->bat_psy)) {
+	// 	dev_err(&pdev->dev, "failed to register battery\n");
+	// 	return PTR_ERR(chg->bat_psy);
+	// }
+	//
 	usb_cfg.drv_data = chg;
 	usb_cfg.supplied_to = smbb_bif;
 	usb_cfg.num_supplicants = ARRAY_SIZE(smbb_bif);
